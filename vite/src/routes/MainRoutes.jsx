@@ -25,12 +25,12 @@ const TablesPage = Loadable(lazy(() => import('pages/tables')));
 const ReservationsPage = Loadable(lazy(() => import('pages/reservations')));
 const OrdersPage = Loadable(lazy(() => import('pages/orders')));
 const KitchenPage = Loadable(lazy(() => import('pages/kitchen')));
-const BillingPage = Loadable(lazy(() => import('pages/Billing')));
+const BillingPage = Loadable(lazy(() => import('pages/billing')));
 const InventoryPage = Loadable(lazy(() => import('pages/inventory')));
 const SuppliersPage = Loadable(lazy(() => import('pages/suppliers')));
 const ReportsPage = Loadable(lazy(() => import('pages/reports')));
 const SettingsPage = Loadable(lazy(() => import('pages/settings')));
-const Logout = Loadable(lazy(() => import('pages/Logout')));
+const Logout = Loadable(lazy(() => import('pages/logout')));
 
 // ============================== MAIN ROUTING ============================== //
 
@@ -87,7 +87,7 @@ const MainRoutes = {
           path: 'tables',
           element: <TablesPage />
         },
-      
+
         {
           path: 'reservations',
           element: <ReservationsPage />
