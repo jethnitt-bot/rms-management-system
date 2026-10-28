@@ -1,10 +1,33 @@
-import { AppstoreOutlined, ShopOutlined, TableOutlined, CalendarOutlined } from '@ant-design/icons';
-
-const icons = {
+import {
+  UserOutlined,
   AppstoreOutlined,
   ShopOutlined,
   TableOutlined,
-  CalendarOutlined
+  UsergroupAddOutlined,
+  CalendarOutlined,
+  ShoppingOutlined,
+  FireOutlined,
+  FileTextOutlined,
+  DatabaseOutlined,
+  TeamOutlined,
+  BarChartOutlined,
+  SettingOutlined
+} from '@ant-design/icons';
+
+const icons = {
+  UserOutlined,
+  AppstoreOutlined,
+  ShopOutlined,
+  TableOutlined,
+  UsergroupAddOutlined,
+  CalendarOutlined,
+  ShoppingOutlined,
+  FireOutlined,
+  FileTextOutlined,
+  DatabaseOutlined,
+  TeamOutlined,
+  BarChartOutlined,
+  SettingOutlined
 };
 
 const categories = {
@@ -13,19 +36,19 @@ const categories = {
   type: 'group',
   children: [
     {
-      id: 'categories',
-      title: 'Categories',
+      id: 'orders',
+      title: 'Orders',
       type: 'item',
-      url: '/categories',
-      icon: icons.AppstoreOutlined,
+      url: '/orders',
+      icon: icons.ShoppingOutlined,
       breadcrumbs: false
     },
     {
-      id: 'menu',
-      title: 'Menu',
+      id: 'kitchen',
+      title: 'Kitchen',
       type: 'item',
-      url: '/menu',
-      icon: icons.ShopOutlined,
+      url: '/kitchen',
+      icon: icons.FireOutlined,
       breadcrumbs: false
     },
     {
@@ -42,6 +65,71 @@ const categories = {
       type: 'item',
       url: '/reservations',
       icon: icons.CalendarOutlined,
+      breadcrumbs: false
+    },
+    {
+      id: 'menu',
+      title: 'Menu',
+      type: 'item',
+      url: '/menu',
+      icon: icons.ShopOutlined,
+      breadcrumbs: false
+    },
+    {
+      id: 'categories',
+      title: 'Categories',
+      type: 'item',
+      url: '/categories',
+      icon: icons.AppstoreOutlined,
+      breadcrumbs: false
+    },
+
+    {
+      id: 'billing',
+      title: 'Billing',
+      type: 'item',
+      url: '/billing',
+      icon: icons.FileTextOutlined,
+      breadcrumbs: false
+    },
+    {
+      id: 'inventory',
+      title: 'Inventory',
+      type: 'item',
+      url: '/inventory',
+      icon: icons.DatabaseOutlined,
+      breadcrumbs: false
+    },
+    {
+      id: 'suppliers',
+      title: 'Suppliers',
+      type: 'item',
+      url: '/suppliers',
+      icon: icons.TeamOutlined,
+      breadcrumbs: false
+    },
+    {
+      id: 'reports',
+      title: 'Reports',
+      type: 'item',
+      url: '/reports',
+      icon: icons.BarChartOutlined,
+      breadcrumbs: false
+    },
+    {
+      id: 'settings',
+      title: 'Settings',
+      type: 'item',
+      url: '/settings',
+      icon: icons.SettingOutlined,
+      breadcrumbs: false
+    },
+    {
+      id: 'user-management',
+      title: 'User Management',
+      type: 'item',
+      url: '/users',
+      icon: icons.UserOutlined,
       breadcrumbs: false
     }
   ]

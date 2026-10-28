@@ -1,4 +1,4 @@
-import myLogo from '../../assets/images/users/my-logo.jpg';
+import myLogo from '../../assets/images/users/my-Logo.jpg';
 
 export default function LogoMain() {
   return (

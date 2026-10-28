@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Grid,
   Card,
@@ -20,13 +20,13 @@ import {
   MenuItem,
   Select,
   FormControl,
-  InputLabel,
   RadioGroup,
   FormControlLabel,
   Radio,
   Box,
   Pagination,
-  InputAdornment
+  InputAdornment,
+  CircularProgress
 } from '@mui/material';
 import {
   TableOutlined,
@@ -36,23 +36,10 @@ import {
   PlusOutlined,
   EyeOutlined,
   EditOutlined,
-  DeleteOutlined,
   SearchOutlined,
   FilterOutlined,
   UpOutlined
 } from '@ant-design/icons';
-
-// 1. Initial Dummy Data
-const initialTables = [
-  { id: 'DRD-00041', name: 'Table 01', capacity: '4 Seater', zone: 'Main Floor', location: '', status: 'Available' },
-  { id: 'DRD-00042', name: 'Table 02', capacity: '4 Seater', zone: 'Main Floor', location: '', status: 'Occupied' },
-  { id: 'DRD-00043', name: 'Table 03', capacity: '2 Seater', zone: 'Window', location: '', status: 'Occupied' },
-  { id: 'DRD-00044', name: 'Table 04', capacity: '2 Seater', zone: 'Garden', location: '', status: 'Reserved' },
-  { id: 'DRD-00045', name: 'Table 05', capacity: '4 Seater', zone: 'Window', location: '', status: 'Occupied' },
-  { id: 'DRD-00047', name: 'Table 07', capacity: '2 Seater', zone: 'Garden', location: '', status: 'Reserved' },
-  { id: 'DRD-00048', name: 'Table 08', capacity: '4 Seater', zone: 'Window', location: '', status: 'Cleaning' },
-  { id: 'DRD-00049', name: 'Table 09', capacity: '2 Seater', zone: 'Garden', location: '', status: 'Cleaning' }
-];
 
 const capacityOptions = ['2 Seater', '4 Seater', '6 Seater', '8 Seater'];
 const zoneOptions = ['Main Floor', 'Window', 'Garden', 'Private Room'];
@@ -68,9 +55,15 @@ const getStatusColor = (status) => {
 };
 
 const TablesPage = () => {
-  const [tables, setTables] = useState(initialTables);
+  const [tables, setTables] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(true);
   const [editingId, setEditingId] = useState(null);
+
+  // State សម្រាប់ Filter & Search
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedZone, setSelectedZone] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -79,6 +72,26 @@ const TablesPage = () => {
     location: '',
     status: 'Available'
   });
+
+  // 🟢 ១. ទាញយកទិន្នន័យ Tables ពី Backend API
+  const fetchTables = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('http://localhost/rms_backend/api/tables/get_tables.php');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setTables(data);
+      }
+    } catch (error) {
+      console.error('Error fetching tables:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTables();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -96,7 +109,8 @@ const TablesPage = () => {
     setEditingId(null);
   };
 
-  const handleSaveTable = (e) => {
+  // 🟢 ២. Function បង្កើត ឬ កែប្រែទិន្នន័យ Table (Save / Update)
+  const handleSaveTable = async (e) => {
     e.preventDefault();
 
     if (!formData.name.trim() || !formData.capacity || !formData.zone) {
@@ -104,63 +118,65 @@ const TablesPage = () => {
       return;
     }
 
-    if (editingId) {
-      setTables(
-        tables.map((t) =>
-          t.id === editingId
-            ? {
-                ...t,
-                name: formData.name,
-                capacity: formData.capacity,
-                zone: formData.zone,
-                location: formData.location,
-                status: formData.status
-              }
-            : t
-        )
-      );
-      setEditingId(null);
-    } else {
-      const newTable = {
-        id: `DRD-${String(tables.length + 41).padStart(5, '0')}`,
-        name: formData.name,
-        capacity: formData.capacity,
-        zone: formData.zone,
-        location: formData.location,
-        status: formData.status
-      };
-      setTables([...tables, newTable]);
-    }
+    try {
+      const url = editingId
+        ? 'http://localhost/rms_backend/api/tables/update_table.php'
+        : 'http://localhost/rms_backend/api/tables/create_table.php';
 
-    resetForm();
+      const payload = editingId ? { id: editingId, ...formData } : formData;
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await res.json();
+
+      if (result.status === 'success') {
+        alert(editingId ? 'កែប្រែ Table ជោគជ័យ!' : 'បង្កើត Table ថ្មីជោគជ័យ!');
+        resetForm();
+        fetchTables(); // Refresh List
+      } else {
+        alert('មានបញ្ហា៖ ' + result.message);
+      }
+    } catch (error) {
+      console.error('Error saving table:', error);
+      alert('មិនអាចភ្ជាប់ទៅកាន់ Server បានទេ!');
+    }
   };
 
   const handleEdit = (table) => {
     setEditingId(table.id);
     setFormData({
-      name: table.name,
-      capacity: table.capacity,
-      zone: table.zone,
-      location: table.location,
-      status: table.status
+      name: table.name || '',
+      capacity: table.capacity || '',
+      zone: table.zone || '',
+      location: table.location || '',
+      status: table.status || 'Available'
     });
     setShowAddForm(true);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('តើអ្នកពិតជាចង់លុប Table នេះមែនទេ?')) {
-      setTables(tables.filter((t) => t.id !== id));
-    }
-  };
-
+  // 🟢 ៣. គណនា Stat Cards តាមរៀលថែម
   const totalTables = tables.length;
   const availableTables = tables.filter((t) => t.status === 'Available').length;
   const occupiedTables = tables.filter((t) => t.status === 'Occupied').length;
   const reservedCleaningTables = tables.filter((t) => t.status === 'Reserved' || t.status === 'Cleaning').length;
 
+  // 🟢 ៤. Filter & Search Logic
+  const filteredTables = tables.filter((t) => {
+    const matchesSearch = (t.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          String(t.id).includes(searchTerm);
+    const matchesZone = selectedZone === 'All' || t.zone === selectedZone;
+    const matchesStatus = selectedStatus === 'All' || t.status === selectedStatus;
+    
+    return matchesSearch && matchesZone && matchesStatus;
+  });
+
   return (
     <Box sx={{ p: 1 }}>
-      {/* 1. Stat Cards */}
+      {/* 1. Stat Cards Section */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {[
           { title: 'Total Tables', count: totalTables, sub: 'Total Tables', icon: <TableOutlined />, color: '#2563eb', bg: '#dbeafe' },
@@ -168,7 +184,7 @@ const TablesPage = () => {
           { title: 'Occupied Tables', count: occupiedTables, sub: 'Occupied Tables', icon: <TeamOutlined />, color: '#d97706', bg: '#fef3c7' },
           { title: 'Reserved/Cleaning', count: reservedCleaningTables, sub: 'Reserved/Cleaning', icon: <CalendarOutlined />, color: '#7c3aed', bg: '#f3e8ff' }
         ].map((card, index) => (
-          <Grid  xs={12} sm={6} md={3} key={index}>
+          <Grid item xs={12} sm={6} md={3} key={index}>
             <Card sx={{ borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
               <CardContent>
                 <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
@@ -207,9 +223,11 @@ const TablesPage = () => {
             {/* Filter Bar */}
             <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
               <TextField
-                placeholder="Search by tables name, tables..."
+                placeholder="Search by table name or ID..."
                 size="small"
-                fullwidth
+                fullWidth
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -218,72 +236,101 @@ const TablesPage = () => {
                   )
                 }}
               />
-              <Select defaultValue="All" size="small" sx={{ minWidth: 130 }}>
-                <MenuItem value="All">Zone</MenuItem>
+              <Select 
+                value={selectedZone} 
+                onChange={(e) => setSelectedZone(e.target.value)} 
+                size="small" 
+                sx={{ minWidth: 130 }}
+              >
+                <MenuItem value="All">All Zones</MenuItem>
                 {zoneOptions.map((z) => (
                   <MenuItem key={z} value={z}>{z}</MenuItem>
                 ))}
               </Select>
-              <Select defaultValue="All" size="small" sx={{ minWidth: 130 }}>
-                <MenuItem value="All">Status</MenuItem>
+              <Select 
+                value={selectedStatus} 
+                onChange={(e) => setSelectedStatus(e.target.value)} 
+                size="small" 
+                sx={{ minWidth: 130 }}
+              >
+                <MenuItem value="All">All Status</MenuItem>
                 <MenuItem value="Available">Available</MenuItem>
                 <MenuItem value="Occupied">Occupied</MenuItem>
                 <MenuItem value="Reserved">Reserved</MenuItem>
                 <MenuItem value="Cleaning">Cleaning</MenuItem>
               </Select>
-              <Button variant="outlined" startIcon={<FilterOutlined />}>Filter</Button>
+              <Button variant="outlined" startIcon={<FilterOutlined />} onClick={fetchTables}>
+                Refresh
+              </Button>
             </Stack>
 
             {/* Tables Table */}
             <TableContainer>
               <Table>
-                <TableHead>
+                <TableHead sx={{ bgcolor: '#f8fafc' }}>
                   <TableRow>
-                    <TableCell>Table ID</TableCell>
-                    <TableCell>Table Name</TableCell>
-                    <TableCell>Capacity</TableCell>
-                    <TableCell>Zone</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="center">Action</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Table ID</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Table Name</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Capacity</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Zone</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 'bold' }}>Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {tables.map((table) => {
-                    const statusStyle = getStatusColor(table.status);
-                    return (
-                      <TableRow key={table.id} hover>
-                        <TableCell>#{table.id}</TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight="bold">{table.name}</Typography>
-                        </TableCell>
-                        <TableCell>{table.capacity}</TableCell>
-                        <TableCell>{table.zone}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={table.status}
-                            size="small"
-                            sx={{ bgcolor: statusStyle.bg, color: statusStyle.color, fontWeight: 'bold' }}
-                          />
-                        </TableCell>
-                        <TableCell align="center">
-                          <Stack direction="row" spacing={0.5} justifyContent="center">
-                            <IconButton size="small" color="primary"><EyeOutlined /></IconButton>
-                            <IconButton size="small" color="warning" onClick={() => handleEdit(table)}><EditOutlined /></IconButton>
-                            <IconButton size="small" color="error" onClick={() => handleDelete(table.id)}><DeleteOutlined /></IconButton>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <CircularProgress size={30} />
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredTables.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                        ពុំទាន់មានទិន្នន័យតុនៅឡើយទេ
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredTables.map((table) => {
+                      const statusStyle = getStatusColor(table.status);
+                      return (
+                        <TableRow key={table.id} hover>
+                          <TableCell sx={{ fontWeight: 'bold' }}>#{table.id}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="bold">{table.name}</Typography>
+                          </TableCell>
+                          <TableCell>{table.capacity}</TableCell>
+                          <TableCell>{table.zone}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={table.status}
+                              size="small"
+                              sx={{ bgcolor: statusStyle.bg, color: statusStyle.color, fontWeight: 'bold' }}
+                            />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Stack direction="row" spacing={0.5} justifyContent="center">
+                              <IconButton size="small" color="primary" title="View">
+                                <EyeOutlined />
+                              </IconButton>
+                              <IconButton size="small" color="warning" onClick={() => handleEdit(table)} title="Edit">
+                                <EditOutlined />
+                              </IconButton>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
               <Typography variant="body2" color="text.secondary">
-                Showing 1 to {tables.length} of {tables.length} items
+                Showing {filteredTables.length > 0 ? 1 : 0} to {filteredTables.length} of {filteredTables.length} items
               </Typography>
-              <Pagination count={Math.max(1, Math.ceil(tables.length / 8))} color="primary" shape="rounded" />
+              <Pagination count={Math.max(1, Math.ceil(filteredTables.length / 8))} color="primary" shape="rounded" />
             </Box>
           </Paper>
         </Grid>
@@ -312,7 +359,7 @@ const TablesPage = () => {
                       name="name"
                       value={formData.name}
                       onChange={handleChange}
-                      placeholder="Enter table name"
+                      placeholder="Enter table name (e.g. Table 01)"
                       size="small"
                       fullWidth
                     />
@@ -347,13 +394,13 @@ const TablesPage = () => {
                   {/* Location */}
                   <Box>
                     <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                      Location <span style={{ color: 'red' }}>*</span>
+                      Location
                     </Typography>
                     <TextField
                       name="location"
                       value={formData.location}
                       onChange={handleChange}
-                      placeholder="Enter location"
+                      placeholder="Enter location detail"
                       size="small"
                       fullWidth
                     />
@@ -366,7 +413,7 @@ const TablesPage = () => {
                     </Typography>
                     <RadioGroup row name="status" value={formData.status} onChange={handleChange}>
                       <FormControlLabel value="Available" control={<Radio size="small" />} label="Available" />
-                      <FormControlLabel value="Unavailable" control={<Radio size="small" />} label="Unavailable" />
+                      <FormControlLabel value="Occupied" control={<Radio size="small" />} label="Occupied" />
                     </RadioGroup>
                   </FormControl>
 

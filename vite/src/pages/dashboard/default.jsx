@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // material-ui
 import Avatar from '@mui/material/Avatar';
-import AvatarGroup from '@mui/material/AvatarGroup';
 import Button from '@mui/material/Button';
 import Grid from '@mui/material/Grid';
 import IconButton from '@mui/material/IconButton';
@@ -28,14 +28,23 @@ import OrdersTable from 'sections/dashboard/default/OrdersTable';
 
 // assets
 import EllipsisOutlined from '@ant-design/icons/EllipsisOutlined';
-import GiftOutlined from '@ant-design/icons/GiftOutlined';
-import MessageOutlined from '@ant-design/icons/MessageOutlined';
-import SettingOutlined from '@ant-design/icons/SettingOutlined';
+import CoffeeOutlined from '@ant-design/icons/CoffeeOutlined';
+import ShoppingCartOutlined from '@ant-design/icons/ShoppingCartOutlined';
+import UserAddOutlined from '@ant-design/icons/UserAddOutlined';
+import FileTextOutlined from '@ant-design/icons/FileTextOutlined';
+import TableOutlined from '@ant-design/icons/TableOutlined';
+import CalendarOutlined from '@ant-design/icons/CalendarOutlined';
+import InboxOutlined from '@ant-design/icons/InboxOutlined';
+import AppstoreOutlined from '@ant-design/icons/AppstoreOutlined';
 
-import avatar1 from 'assets/images/users/avatar-1.png';
-import avatar2 from 'assets/images/users/avatar-2.png';
-import avatar3 from 'assets/images/users/avatar-3.png';
-import avatar4 from 'assets/images/users/avatar-4.png';
+// ==============================|| API CONFIG ||============================== //
+const API_BASE = 'http://localhost/rms_backend/api/dashboard';
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function dayLabel(dateStr) {
+  const d = new Date(dateStr);
+  return WEEKDAY_LABELS[d.getDay()];
+}
 
 // avatar style
 const avatarSX = {
@@ -54,25 +63,134 @@ const actionSX = {
   transform: 'none'
 };
 
-// ==============================|| DASHBOARD - DEFAULT ||============================== //
+// ==============================|| EMPTY STATE ||============================== //
+function EmptyState({ message = 'No data yet', height = 220 }) {
+  return (
+    <Box
+      sx={{
+        height,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 1,
+        color: 'text.secondary'
+      }}
+    >
+      <InboxOutlined style={{ fontSize: '1.75rem' }} />
+      <Typography variant="body2">{message}</Typography>
+    </Box>
+  );
+}
+
+// ==============================|| DASHBOARD - RMS ||============================== //
 
 export default function DashboardDefault() {
+  const navigate = useNavigate();
   const [orderMenuAnchor, setOrderMenuAnchor] = useState(null);
   const [analyticsMenuAnchor, setAnalyticsMenuAnchor] = useState(null);
 
-  const handleOrderMenuClick = (event) => {
-    setOrderMenuAnchor(event.currentTarget);
-  };
-  const handleOrderMenuClose = () => {
-    setOrderMenuAnchor(null);
-  };
+  const handleOrderMenuClick = (event) => setOrderMenuAnchor(event.currentTarget);
+  const handleOrderMenuClose = () => setOrderMenuAnchor(null);
+  const handleAnalyticsMenuClick = (event) => setAnalyticsMenuAnchor(event.currentTarget);
+  const handleAnalyticsMenuClose = () => setAnalyticsMenuAnchor(null);
 
-  const handleAnalyticsMenuClick = (event) => {
-    setAnalyticsMenuAnchor(event.currentTarget);
-  };
-  const handleAnalyticsMenuClose = () => {
-    setAnalyticsMenuAnchor(null);
-  };
+  const [stats, setStats] = useState({
+    totalMenuItems: 0,
+    totalCategories: 0,
+    totalCustomers: 0,
+    todaysOrders: 0,
+    todaysReservations: 0,
+    availableTables: 0
+  });
+
+  const [orders, setOrders] = useState([]);
+
+  const [orderStatus, setOrderStatus] = useState({ pending: 0, preparing: 0, completedToday: 0 });
+  const [orderStatusTrendData, setOrderStatusTrendData] = useState([]);
+  const [orderStatusTrendLabels, setOrderStatusTrendLabels] = useState([]);
+
+  const [todaysRevenue, setTodaysRevenue] = useState(0);
+  const [weeklyRevenueData, setWeeklyRevenueData] = useState([]);
+  const [weeklyRevenueLabels, setWeeklyRevenueLabels] = useState([]);
+
+  const [bestSelling, setBestSelling] = useState([]);
+
+  // Unique Visitor State
+  const [visitorData, setVisitorData] = useState({ monthly: [], weekly: [] });
+  // Sales Report State
+  const [salesReportData, setSalesReportData] = useState({ today: [], month: [], year: [] });
+
+  const hasOrderStatus = orderStatus.pending + orderStatus.preparing + orderStatus.completedToday > 0;
+  const hasRevenueData = todaysRevenue > 0;
+  const hasBestSelling = bestSelling.length > 0;
+
+  useEffect(() => {
+    // Stat Cards
+    fetch(`${API_BASE}/stats.php`)
+      .then((res) => res.json())
+      .then(setStats)
+      .catch((err) => console.error('Failed to load stats:', err));
+
+    // Recent Orders
+    fetch(`${API_BASE}/recent_orders.php`)
+      .then((res) => res.json())
+      .then(setOrders)
+      .catch((err) => console.error('Failed to load recent orders:', err));
+
+    // Order Status Overview
+    fetch(`${API_BASE}/order_status.php`)
+      .then((res) => res.json())
+      .then((data) => {
+        setOrderStatus({
+          pending: data.pending ?? 0,
+          preparing: data.preparing ?? 0,
+          completedToday: data.completedToday ?? 0
+        });
+        const trend = data.trend ?? [];
+        setOrderStatusTrendData(trend.map((t) => t.total));
+        setOrderStatusTrendLabels(trend.map((t) => dayLabel(t.day)));
+      })
+      .catch((err) => console.error('Failed to load order status:', err));
+
+    // Revenue
+    fetch(`${API_BASE}/revenue.php`)
+      .then((res) => res.json())
+      .then((data) => {
+        setTodaysRevenue(data.todaysRevenue ?? 0);
+        const weekly = data.weekly ?? [];
+        setWeeklyRevenueData(weekly.map((w) => w.total));
+        setWeeklyRevenueLabels(weekly.map((w) => dayLabel(w.day)));
+      })
+      .catch((err) => console.error('Failed to load revenue:', err));
+
+    // Best Selling Menu
+    fetch(`${API_BASE}/best_selling.php`)
+      .then((res) => res.json())
+      .then(setBestSelling)
+      .catch((err) => console.error('Failed to load best selling:', err));
+
+    // Unique Visitor Data
+    fetch(`${API_BASE}/visitors.php`)
+      .then((res) => res.json())
+      .then(setVisitorData)
+      .catch((err) => console.error('Failed to load visitors data:', err));
+
+    // Sales Report Data
+    fetch(`${API_BASE}/sales_report.php`)
+      .then((res) => res.json())
+      .then(setSalesReportData)
+      .catch((err) => console.error('Failed to load sales report data:', err));
+  }, []);
+
+  const quickActions = [
+    { label: 'New Order', icon: <ShoppingCartOutlined />, color: 'primary', to: '/orders/new' },
+    { label: 'New Reservation', icon: <CalendarOutlined />, color: 'warning', to: '/reservations/new' },
+    { label: 'Add Menu', icon: <FileTextOutlined />, color: 'error', to: '/menu/new' },
+    { label: 'Add Table', icon: <TableOutlined />, color: 'secondary', to: '/tables/new' },
+    { label: 'Add Customer', icon: <UserAddOutlined />, color: 'warning', to: '/users/new' },
+    { label: 'Generate Report', icon: <FileTextOutlined />, color: 'success', to: '/reports' }
+  ];
 
   return (
     <Grid container rowSpacing={4.5} columnSpacing={2.75}>
@@ -80,42 +198,100 @@ export default function DashboardDefault() {
       <Grid sx={{ mb: -2.25 }} size={12}>
         <Typography variant="h5">Dashboard</Typography>
       </Grid>
-      <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Total Page Views" count="4,42,236" percentage={59.3} extra="35,000" />
+
+      {/* Quick stat cards */}
+      <Grid size={{ xs: 12, sm: 6, lg: 2 }}>
+        <AnalyticEcommerce
+          title="Total Menu Items"
+          count={String(stats.totalMenuItems)}
+          percentage={0}
+          extra="Items"
+          icon={<CoffeeOutlined />}
+        />
       </Grid>
-      <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Total Users" count="78,250" percentage={70.5} extra="8,900" />
+      <Grid size={{ xs: 12, sm: 6, lg: 2 }}>
+        <AnalyticEcommerce
+          title="Total Categories"
+          count={String(stats.totalCategories)}
+          percentage={0}
+          extra="Categories"
+          color="success"
+          icon={<AppstoreOutlined />}
+        />
       </Grid>
-      <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Total Order" count="18,800" percentage={27.4} isLoss color="warning" extra="1,943" />
+      <Grid size={{ xs: 12, sm: 6, lg: 2 }}>
+        <AnalyticEcommerce
+          title="Total Customers"
+          count={String(stats.totalCustomers)}
+          percentage={0}
+          extra="Customers"
+          color="secondary"
+          icon={<UserAddOutlined />}
+        />
       </Grid>
-      <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Total Sales" count="35,078" percentage={27.4} isLoss color="warning" extra="20,395" />
+      <Grid size={{ xs: 12, sm: 6, lg: 2 }}>
+        <AnalyticEcommerce
+          title="Today's Orders"
+          count={String(stats.todaysOrders)}
+          percentage={0}
+          extra="Orders"
+          color="warning"
+          icon={<ShoppingCartOutlined />}
+        />
       </Grid>
-      <Grid sx={{ display: { sm: 'none', md: 'block', lg: 'none' } }} size={{ md: 8 }} />
+      <Grid size={{ xs: 12, sm: 6, lg: 2 }}>
+        <AnalyticEcommerce
+          title="Today's Reservations"
+          count={String(stats.todaysReservations)}
+          percentage={0}
+          extra="Reservations"
+          color="error"
+          icon={<CalendarOutlined />}
+        />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 6, lg: 2 }}>
+        <AnalyticEcommerce
+          title="Available Tables"
+          count={String(stats.availableTables)}
+          percentage={0}
+          extra="Tables"
+          color="info"
+          icon={<TableOutlined />}
+        />
+      </Grid>
+
       {/* row 2 */}
       <Grid size={{ xs: 12, md: 7, lg: 8 }}>
-        <UniqueVisitorCard />
+        <UniqueVisitorCard data={visitorData} />
       </Grid>
       <Grid size={{ xs: 12, md: 5, lg: 4 }}>
         <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Grid>
-            <Typography variant="h5">Income Overview</Typography>
+            <Typography variant="h5">Today&apos;s Revenue</Typography>
           </Grid>
           <Grid />
         </Grid>
         <MainCard sx={{ mt: 2 }} content={false}>
-          <Box sx={{ p: 3, pb: 0 }}>
-            <Stack sx={{ gap: 2 }}>
-              <Typography variant="h6" sx={{ color: 'text.secondary' }}>
-                This Week Statistics
-              </Typography>
-              <Typography variant="h3">$7,650</Typography>
-            </Stack>
-          </Box>
-          <MonthlyBarChart />
+          {hasRevenueData ? (
+            <>
+              <Box sx={{ p: 3, pb: 0 }}>
+                <Stack sx={{ gap: 2 }}>
+                  <Typography variant="h6" sx={{ color: 'text.secondary' }}>
+                    This Week Statistics
+                  </Typography>
+                  <Typography variant="h3">${todaysRevenue.toFixed(2)}</Typography>
+                </Stack>
+              </Box>
+              <MonthlyBarChart data={weeklyRevenueData} labels={weeklyRevenueLabels} />
+            </>
+          ) : (
+            <Box sx={{ p: 3 }}>
+              <EmptyState message="No revenue yet" height={180} />
+            </Box>
+          )}
         </MainCard>
       </Grid>
+
       {/* row 3 */}
       <Grid size={{ xs: 12, md: 7, lg: 8 }}>
         <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
@@ -142,13 +318,14 @@ export default function DashboardDefault() {
           </Grid>
         </Grid>
         <MainCard sx={{ mt: 2 }} content={false}>
-          <OrdersTable />
+          <OrdersTable rows={orders} />
         </MainCard>
       </Grid>
+
       <Grid size={{ xs: 12, md: 5, lg: 4 }}>
         <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Grid>
-            <Typography variant="h5">Analytics Report</Typography>
+            <Typography variant="h5">Order Status Overview</Typography>
           </Grid>
           <Grid>
             <IconButton onClick={handleAnalyticsMenuClick}>
@@ -163,144 +340,123 @@ export default function DashboardDefault() {
               anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-              <MenuItem onClick={handleAnalyticsMenuClose}>Weekly</MenuItem>
-              <MenuItem onClick={handleAnalyticsMenuClose}>Monthly</MenuItem>
-              <MenuItem onClick={handleAnalyticsMenuClose}>Yearly</MenuItem>
+              <MenuItem onClick={handleAnalyticsMenuClose}>Today</MenuItem>
+              <MenuItem onClick={handleAnalyticsMenuClose}>This Week</MenuItem>
+              <MenuItem onClick={handleAnalyticsMenuClose}>This Month</MenuItem>
             </Menu>
           </Grid>
         </Grid>
         <MainCard sx={{ mt: 2 }} content={false}>
-          <List sx={{ p: 0, '& .MuiListItemButton-root': { py: 2 } }}>
-            <ListItemButton divider>
-              <ListItemText primary="Company Finance Growth" />
-              <Typography variant="h5">+45.14%</Typography>
-            </ListItemButton>
-            <ListItemButton divider>
-              <ListItemText primary="Company Expenses Ratio" />
-              <Typography variant="h5">0.58%</Typography>
-            </ListItemButton>
-            <ListItemButton>
-              <ListItemText primary="Business Risk Cases" />
-              <Typography variant="h5">Low</Typography>
-            </ListItemButton>
-          </List>
-          <ReportAreaChart />
+          {hasOrderStatus ? (
+            <>
+              <List sx={{ p: 0, '& .MuiListItemButton-root': { py: 2 } }}>
+                <ListItemButton divider>
+                  <ListItemText primary="Pending Orders" />
+                  <Typography variant="h5">{orderStatus.pending}</Typography>
+                </ListItemButton>
+                <ListItemButton divider>
+                  <ListItemText primary="Preparing" />
+                  <Typography variant="h5">{orderStatus.preparing}</Typography>
+                </ListItemButton>
+                <ListItemButton>
+                  <ListItemText primary="Completed Today" />
+                  <Typography variant="h5">{orderStatus.completedToday}</Typography>
+                </ListItemButton>
+              </List>
+              <ReportAreaChart data={orderStatusTrendData} labels={orderStatusTrendLabels} />
+            </>
+          ) : (
+            <EmptyState message="No order status data yet" />
+          )}
         </MainCard>
       </Grid>
+
       {/* row 4 */}
       <Grid size={{ xs: 12, md: 7, lg: 8 }}>
-        <SaleReportCard />
+        <SaleReportCard data={salesReportData} />
       </Grid>
+
       <Grid size={{ xs: 12, md: 5, lg: 4 }}>
         <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Grid>
-            <Typography variant="h5">Transaction History</Typography>
+            <Typography variant="h5">Best Selling Menu</Typography>
           </Grid>
           <Grid />
         </Grid>
         <MainCard sx={{ mt: 2 }} content={false}>
-          <List
-            component="nav"
-            sx={{
-              px: 0,
-              py: 0,
-              '& .MuiListItemButton-root': {
-                py: 1.5,
-                px: 2,
-                '& .MuiAvatar-root': avatarSX,
-                '& .MuiListItemSecondaryAction-root': { ...actionSX, position: 'relative' }
-              }
-            }}
-          >
-            <ListItem
-              component={ListItemButton}
-              divider
-              secondaryAction={
-                <Stack sx={{ alignItems: 'flex-end' }}>
-                  <Typography variant="subtitle1" noWrap>
-                    + $1,430
-                  </Typography>
-                  <Typography variant="h6" sx={{ color: 'secondary.main' }} noWrap>
-                    78%
-                  </Typography>
-                </Stack>
-              }
+          {hasBestSelling ? (
+            <List
+              component="nav"
+              sx={{
+                px: 0,
+                py: 0,
+                '& .MuiListItemButton-root': {
+                  py: 1.5,
+                  px: 2,
+                  '& .MuiAvatar-root': avatarSX,
+                  '& .MuiListItemSecondaryAction-root': { ...actionSX, position: 'relative' }
+                }
+              }}
             >
-              <ListItemAvatar>
-                <Avatar sx={{ color: 'success.main', bgcolor: 'success.lighter' }}>
-                  <GiftOutlined />
-                </Avatar>
-              </ListItemAvatar>
-              <ListItemText primary={<Typography variant="subtitle1">Order #002434</Typography>} secondary="Today, 2:00 AM" />
-            </ListItem>
-            <ListItem
-              component={ListItemButton}
-              divider
-              secondaryAction={
-                <Stack sx={{ alignItems: 'flex-end' }}>
-                  <Typography variant="subtitle1" noWrap>
-                    + $302
-                  </Typography>
-                  <Typography variant="h6" sx={{ color: 'secondary.main' }} noWrap>
-                    8%
-                  </Typography>
-                </Stack>
-              }
-            >
-              <ListItemAvatar>
-                <Avatar sx={{ color: 'primary.main', bgcolor: 'primary.lighter' }}>
-                  <MessageOutlined />
-                </Avatar>
-              </ListItemAvatar>
-              <ListItemText primary={<Typography variant="subtitle1">Order #984947</Typography>} secondary="5 August, 1:45 PM" />
-            </ListItem>
-            <ListItem
-              component={ListItemButton}
-              secondaryAction={
-                <Stack sx={{ alignItems: 'flex-end' }}>
-                  <Typography variant="subtitle1" noWrap>
-                    + $682
-                  </Typography>
-                  <Typography variant="h6" sx={{ color: 'secondary.main' }} noWrap>
-                    16%
-                  </Typography>
-                </Stack>
-              }
-            >
-              <ListItemAvatar>
-                <Avatar sx={{ color: 'error.main', bgcolor: 'error.lighter' }}>
-                  <SettingOutlined />
-                </Avatar>
-              </ListItemAvatar>
-              <ListItemText primary={<Typography variant="subtitle1">Order #988784</Typography>} secondary="7 hours ago" />
-            </ListItem>
-          </List>
+              {bestSelling.map((item, idx) => (
+                <ListItem
+                  key={item.name}
+                  component={ListItemButton}
+                  divider={idx !== bestSelling.length - 1}
+                  secondaryAction={
+                    <Stack sx={{ alignItems: 'flex-end' }}>
+                      <Typography variant="subtitle1" noWrap>
+                        {item.revenue}
+                      </Typography>
+                      <Typography variant="h6" sx={{ color: 'secondary.main' }} noWrap>
+                        {item.pct}
+                      </Typography>
+                    </Stack>
+                  }
+                >
+                  <ListItemAvatar>
+                    <Avatar sx={{ color: 'success.main', bgcolor: 'success.lighter' }}>
+                      <CoffeeOutlined />
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={<Typography variant="subtitle1">{item.name}</Typography>}
+                    secondary={`${item.orders} orders`}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          ) : (
+            <EmptyState message="No orders yet to rank best sellers" />
+          )}
         </MainCard>
+
+        {/* Quick Actions */}
         <MainCard sx={{ mt: 2 }}>
-          <Stack sx={{ gap: 3 }}>
-            <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-              <Grid>
-                <Stack>
-                  <Typography variant="h5" noWrap>
-                    Help & Support Chat
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'secondary.main' }} noWrap>
-                    Typical replay within 5 min
-                  </Typography>
-                </Stack>
-              </Grid>
-              <Grid>
-                <AvatarGroup sx={{ '& .MuiAvatar-root': { width: 32, height: 32 } }}>
-                  <Avatar alt="Remy Sharp" src={avatar1} />
-                  <Avatar alt="Travis Howard" src={avatar2} />
-                  <Avatar alt="Cindy Baker" src={avatar3} />
-                  <Avatar alt="Agnes Walker" src={avatar4} />
-                </AvatarGroup>
-              </Grid>
+          <Stack sx={{ gap: 2 }}>
+            <Typography variant="h5">Quick Actions</Typography>
+            <Grid container spacing={1.5}>
+              {quickActions.map((action) => (
+                <Grid key={action.label} size={{ xs: 6 }}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color={action.color}
+                    onClick={() => navigate(action.to)}
+                    sx={{
+                      textTransform: 'none',
+                      flexDirection: 'column',
+                      gap: 0.5,
+                      py: 1.5,
+                      fontSize: '0.7rem'
+                    }}
+                  >
+                    {action.icon}
+                    {action.label}
+                  </Button>
+                </Grid>
+              ))}
             </Grid>
-            <Button size="small" variant="contained" sx={{ textTransform: 'capitalize' }}>
-              Need Help?
-            </Button>
           </Stack>
         </MainCard>
       </Grid>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Grid,
   Card,
@@ -33,163 +33,226 @@ import {
   CloseCircleOutlined,
   FolderOpenOutlined,
   PlusOutlined,
-  EyeOutlined,
   EditOutlined,
   DeleteOutlined,
   SearchOutlined,
   ReloadOutlined,
   CloudUploadOutlined,
-  CloseOutlined,
   UpOutlined
 } from '@ant-design/icons';
 
-// 1. Initial Dummy Data
-const initialMenuItems = [
-  { id: 1, code: 'MN001', name: 'Classic Burger', category: 'Fast Food', price: 5.0, status: 'Available', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=100' },
-  { id: 2, code: 'MN002', name: 'Margherita Pizza', category: 'Main Course', price: 8.5, status: 'Available', image: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=100' },
-  { id: 3, code: 'MN003', name: 'Spaghetti Carbonara', category: 'Main Course', price: 7.5, status: 'Available', image: 'https://images.unsplash.com/photo-1612874742237-6526221588e3?w=100' },
-  { id: 4, code: 'MN004', name: 'Fried Chicken', category: 'Main Course', price: 6.0, status: 'Unavailable', image: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=100' },
-  { id: 5, code: 'MN005', name: 'Cheesecake', category: 'Desserts', price: 4.5, status: 'Available', image: 'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?w=100' },
-  { id: 6, code: 'MN006', name: 'Orange Juice', category: 'Beverages', price: 2.5, status: 'Available', image: 'https://images.unsplash.com/photo-1613478223719-2ab802602423?w=100' },
-  { id: 7, code: 'MN007', name: 'Iced Coffee', category: 'Beverages', price: 2.75, status: 'Available', image: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=100' },
-  { id: 8, code: 'MN008', name: 'Caesar Salad', category: 'Salads', price: 4.0, status: 'Unavailable', image: 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=100' }
+// ---- ពណ៌ Chip សម្រាប់ Category ----
+const CATEGORY_PALETTE = [
+  { bg: '#f3e8ff', color: '#7c3aed' },
+  { bg: '#dbeafe', color: '#1d4ed8' },
+  { bg: '#fce7f3', color: '#be185d' },
+  { bg: '#fef3c7', color: '#b45309' },
+  { bg: '#dcfce7', color: '#15803d' },
+  { bg: '#e0f2fe', color: '#0369a1' }
 ];
 
-const categoryOptions = ['Fast Food', 'Main Course', 'Desserts', 'Beverages', 'Salads'];
-
-const getCategoryColor = (category) => {
-  switch (category) {
-    case 'Fast Food': return { bg: '#f3e8ff', color: '#7c3aed' };
-    case 'Main Course': return { bg: '#dbeafe', color: '#1d4ed8' };
-    case 'Desserts': return { bg: '#fce7f3', color: '#be185d' };
-    case 'Beverages': return { bg: '#fef3c7', color: '#b45309' };
-    case 'Salads': return { bg: '#dcfce7', color: '#15803d' };
-    default: return { bg: '#f1f5f9', color: '#475569' };
-  }
+const getCategoryColor = (categoryId) => {
+  if (!categoryId) return { bg: '#f1f5f9', color: '#475569' };
+  return CATEGORY_PALETTE[categoryId % CATEGORY_PALETTE.length];
 };
 
 const MenuPage = () => {
-  const [menuItems, setMenuItems] = useState(initialMenuItems);
+  const [menuItems, setMenuItems] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [showAddForm, setShowAddForm] = useState(true);
   const [editingId, setEditingId] = useState(null);
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 8;
+  const fileInputRef = useRef(null);
+
+  // Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All');
 
   const [formData, setFormData] = useState({
-    code: '',
     name: '',
-    category: '',
+    category_id: '',
     price: '',
-    description: '',
-    status: 'Available',
-    image: null,
-    imagePreview: ''
+    status: '1' // 1: Available, 0: Unavailable
   });
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
 
+  // ---------------- API Endpoint Config ----------------
+  const SERVER_URL = 'http://localhost/rms_backend/';
+  const MENU_API = 'http://localhost/rms_backend/api/menu/menu_items.php';
+  const CATEGORIES_API = 'http://localhost/rms_backend/api/categories/categories.php';
+
+  const cardShadow = '0 2px 10px rgba(0,0,0,0.04)';
+
+  // ---------------- Fetch ពី Backend ----------------
+  const fetchMenuItems = async () => {
+    try {
+      const res = await fetch(MENU_API);
+      const data = await res.json();
+      if (Array.isArray(data)) setMenuItems(data);
+    } catch (error) {
+      console.error('Error fetching menu items:', error);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch(CATEGORIES_API);
+      const data = await res.json();
+      if (Array.isArray(data)) setCategories(data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchMenuItems();
+    fetchCategories();
+  }, []);
+
+  // ---------------- Form Handlers ----------------
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert('សូមជ្រើសរើសរូបភាពដែលមានទំហំតូចជាង 2MB!');
-        return;
-      }
-      const previewUrl = URL.createObjectURL(file);
-      setFormData((prev) => ({ ...prev, image: file, imagePreview: previewUrl }));
+  const applySelectedFile = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('សូមជ្រើសរើសតែឯកសាររូបភាព!');
+      return;
     }
+    if (file.size > 2 * 1024 * 1024) {
+      alert('សូមជ្រើសរើសរូបភាពដែលមានទំហំតូចជាង 2MB!');
+      return;
+    }
+    setSelectedFile(file);
+    setImagePreview(URL.createObjectURL(file));
   };
 
+  const handleImageChange = (e) => applySelectedFile(e.target.files[0]);
   const handleDrop = (e) => {
     e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      const previewUrl = URL.createObjectURL(file);
-      setFormData((prev) => ({ ...prev, image: file, imagePreview: previewUrl }));
-    }
+    applySelectedFile(e.dataTransfer.files[0]);
   };
 
   const resetForm = () => {
-    setFormData({
-      code: '',
-      name: '',
-      category: '',
-      price: '',
-      description: '',
-      status: 'Available',
-      image: null,
-      imagePreview: ''
-    });
+    setFormData({ name: '', category_id: '', price: '', status: '1' });
+    setSelectedFile(null);
+    setImagePreview('');
     setEditingId(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleSaveMenu = (e) => {
+  const resetFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('All');
+    setSelectedStatus('All');
+  };
+
+  // ---------------- Save (Create/Update) ----------------
+  const handleSaveMenu = async (e) => {
     e.preventDefault();
 
-    if (!formData.code.trim() || !formData.name.trim() || !formData.category) {
-      alert('សូមបំពេញ Menu Code, Menu Name និង Category!');
+    if (!formData.name.trim() || !formData.category_id || !formData.price) {
+      alert('សូមបំពេញ Menu Name, Category និង Price!');
       return;
     }
 
-    if (editingId) {
-      setMenuItems(
-        menuItems.map((item) =>
-          item.id === editingId
-            ? {
-                ...item,
-                code: formData.code,
-                name: formData.name,
-                category: formData.category,
-                price: parseFloat(formData.price) || 0,
-                status: formData.status,
-                image: formData.imagePreview || item.image
-              }
-            : item
-        )
-      );
-      setEditingId(null);
-    } else {
-      const newItem = {
-        id: menuItems.length + 1,
-        code: formData.code,
-        name: formData.name,
-        category: formData.category,
-        price: parseFloat(formData.price) || 0,
-        status: formData.status,
-        image: formData.imagePreview || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100'
-      };
-      setMenuItems([...menuItems, newItem]);
-    }
+    const dataToSend = new FormData();
+    dataToSend.append('name', formData.name);
+    dataToSend.append('category_id', formData.category_id);
+    dataToSend.append('price', formData.price);
+    dataToSend.append('status', formData.status === '1' ? 'Available' : 'Unavailable');
+    if (editingId) dataToSend.append('id', editingId);
+    if (selectedFile) dataToSend.append('image', selectedFile);
 
-    resetForm();
+    try {
+      const res = await fetch(MENU_API, { method: 'POST', body: dataToSend });
+      const result = await res.json();
+
+      if (!res.ok) {
+        alert(result.message || 'មានបញ្ហាកើតឡើង!');
+        return;
+      }
+
+      alert(result.message || 'រក្សាទុកជោគជ័យ!');
+      fetchMenuItems();
+      resetForm();
+    } catch (error) {
+      console.error('Error saving menu item:', error);
+      alert('មិនអាចតភ្ជាប់ទៅកាន់ API បានទេ!');
+    }
   };
 
+  // ---------------- Edit ----------------
   const handleEdit = (item) => {
     setEditingId(item.id);
     setFormData({
-      code: item.code,
-      name: item.name,
-      category: item.category,
-      price: String(item.price),
-      description: '',
-      status: item.status,
-      image: null,
-      imagePreview: item.image
+      name: item.name || '',
+      category_id: item.category_id || '',
+      price: String(item.price ?? ''),
+      status: Number(item.is_available) === 1 || item.status === 'Available' ? '1' : '0'
     });
+    setSelectedFile(null);
+    setImagePreview(item.image ? (item.image.startsWith('http') ? item.image : `${SERVER_URL}${item.image}`) : '');
     setShowAddForm(true);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('តើអ្នកពិតជាចង់លុប Menu នេះមែនទេ?')) {
-      setMenuItems(menuItems.filter((item) => item.id !== id));
+  // ---------------- Delete ----------------
+  const handleDelete = async (id) => {
+    if (!window.confirm('តើអ្នកពិតជាចង់លុប Menu នេះមែនទេ?')) return;
+
+    try {
+      const res = await fetch(`${MENU_API}?id=${id}`, { method: 'DELETE' });
+      const result = await res.json();
+
+      if (!res.ok) {
+        alert(result.message || 'មិនអាចលុបបានទេ!');
+        return;
+      }
+
+      alert(result.message || 'លុបជោគជ័យ!');
+      fetchMenuItems();
+    } catch (error) {
+      console.error('Error deleting menu item:', error);
+      alert('មិនអាចតភ្ជាប់ទៅកាន់ API បានទេ!');
     }
   };
 
+  // ---------------- Filter Logic ----------------
+  const filteredMenuItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      const matchesSearch = (item.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory =
+        selectedCategory === 'All' ||
+        item.category === selectedCategory ||
+        item.category_id === Number(selectedCategory);
+
+      const isAvailable = Number(item.is_available) === 1 || item.status === 'Available';
+      const itemStatusLabel = isAvailable ? 'Available' : 'Unavailable';
+      const matchesStatus = selectedStatus === 'All' || itemStatusLabel === selectedStatus;
+
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [menuItems, searchTerm, selectedCategory, selectedStatus]);
+
+  const pagedMenuItems = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return filteredMenuItems.slice(start, start + itemsPerPage);
+  }, [filteredMenuItems, page]);
+
+  // ---------------- Stat Cards ----------------
   const totalMenuItems = menuItems.length;
-  const availableMenu = menuItems.filter((m) => m.status === 'Available').length;
-  const unavailableMenu = menuItems.filter((m) => m.status === 'Unavailable').length;
-  const totalCategories = new Set(menuItems.map((m) => m.category)).size;
+  const availableMenu = menuItems.filter(
+    (m) => Number(m.is_available) === 1 || m.status === 'Available'
+  ).length;
+  const unavailableMenu = menuItems.filter(
+    (m) => Number(m.is_available) === 0 || m.status === 'Unavailable'
+  ).length;
+  const totalCategories = categories.length;
 
   return (
     <Box sx={{ p: 1 }}>
@@ -201,22 +264,23 @@ const MenuPage = () => {
           { title: 'Unavailable Menu', count: unavailableMenu, sub: 'Not available', icon: <CloseCircleOutlined />, color: '#dc2626', bg: '#fee2e2' },
           { title: 'Categories', count: totalCategories, sub: 'Total categories', icon: <FolderOpenOutlined />, color: '#d97706', bg: '#fef3c7' }
         ].map((card, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card sx={{ borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
+          <Grid key={index} item xs={12} sm={6} md={3}>
+            <Card sx={{ borderRadius: 3, boxShadow: cardShadow }}>
               <CardContent>
                 <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
-                  <Avatar sx={{ bgcolor: card.bg, color: card.color, width: 48, height: 48, borderRadius: '50%' }}>
-                    {card.icon}
-                  </Avatar>
+                  <Avatar sx={{ bgcolor: card.bg, color: card.color, width: 48, height: 48, borderRadius: '50%' }}>{card.icon}</Avatar>
                   <Box>
-                    <Typography variant="body2" color="text.secondary" fontWeight="medium">{card.title}</Typography>
-                    <Typography variant="h4" fontWeight="bold">{card.count}</Typography>
+                    <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                      {card.title}
+                    </Typography>
+                    <Typography variant="h4" fontWeight="bold">
+                      {card.count}
+                    </Typography>
                   </Box>
                 </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                <Typography variant="caption" color="text.secondary">
                   {card.sub}
                 </Typography>
-                <Button size="small" sx={{ p: 0 }}>View all &gt;</Button>
               </CardContent>
             </Card>
           </Grid>
@@ -224,12 +288,14 @@ const MenuPage = () => {
       </Grid>
 
       {/* 2. Main Area (Table + Form) */}
-      <Grid container spacing={3}>
+      <Grid container spacing={3} sx={{ alignItems: 'flex-start' }}>
         {/* Table Section */}
         <Grid item xs={12} md={showAddForm ? 8 : 12}>
-          <Paper sx={{ p: 2.5, borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
+          <Paper sx={{ p: 2.5, borderRadius: 3, boxShadow: cardShadow }}>
             <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h5" fontWeight="bold">Menu Items</Typography>
+              <Typography variant="h5" fontWeight="bold">
+                Menu Items
+              </Typography>
               {!showAddForm && (
                 <Button variant="contained" startIcon={<PlusOutlined />} onClick={() => setShowAddForm(true)}>
                   Add Menu
@@ -238,11 +304,15 @@ const MenuPage = () => {
             </Stack>
 
             {/* Filter Bar */}
-            <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: 'wrap' }}>
               <TextField
-                placeholder="Search menu name, code..."
+                placeholder="Search menu name..."
                 size="small"
-                fullWidth
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPage(1);
+                }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -250,19 +320,40 @@ const MenuPage = () => {
                     </InputAdornment>
                   )
                 }}
+                sx={{ minWidth: 200, flex: 1 }}
               />
-              <Select defaultValue="All" size="small" sx={{ minWidth: 150 }}>
+              <Select
+                value={selectedCategory}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  setPage(1);
+                }}
+                size="small"
+                sx={{ minWidth: 150 }}
+              >
                 <MenuItem value="All">All Categories</MenuItem>
-                {categoryOptions.map((cat) => (
-                  <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                {categories.map((cat) => (
+                  <MenuItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </MenuItem>
                 ))}
               </Select>
-              <Select defaultValue="All" size="small" sx={{ minWidth: 130 }}>
+              <Select
+                value={selectedStatus}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setPage(1);
+                }}
+                size="small"
+                sx={{ minWidth: 130 }}
+              >
                 <MenuItem value="All">All Status</MenuItem>
                 <MenuItem value="Available">Available</MenuItem>
                 <MenuItem value="Unavailable">Unavailable</MenuItem>
               </Select>
-              <Button variant="outlined" startIcon={<ReloadOutlined />}>Reset</Button>
+              <Button variant="outlined" startIcon={<ReloadOutlined />} onClick={resetFilters}>
+                Reset
+              </Button>
             </Stack>
 
             {/* Menu Table */}
@@ -272,7 +363,6 @@ const MenuPage = () => {
                   <TableRow>
                     <TableCell>#</TableCell>
                     <TableCell>Image</TableCell>
-                    <TableCell>Menu Code</TableCell>
                     <TableCell>Menu Name</TableCell>
                     <TableCell>Category</TableCell>
                     <TableCell>Price</TableCell>
@@ -281,52 +371,87 @@ const MenuPage = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {menuItems.map((item, index) => {
-                    const catStyle = getCategoryColor(item.category);
-                    return (
-                      <TableRow key={item.id} hover>
-                        <TableCell>{index + 1}</TableCell>
-                        <TableCell>
-                          <Avatar src={item.image} variant="rounded" sx={{ width: 42, height: 42 }} />
-                        </TableCell>
-                        <TableCell>{item.code}</TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight="bold">{item.name}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={item.category} size="small" sx={{ bgcolor: catStyle.bg, color: catStyle.color, fontWeight: 'bold' }} />
-                        </TableCell>
-                        <TableCell>${item.price.toFixed(2)}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={item.status}
-                            size="small"
-                            sx={{
-                              bgcolor: item.status === 'Available' ? '#dcfce7' : '#fee2e2',
-                              color: item.status === 'Available' ? '#15803d' : '#b91c1c',
-                              fontWeight: 'bold'
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell align="center">
-                          <Stack direction="row" spacing={0.5} justifyContent="center">
-                            <IconButton size="small" color="primary"><EyeOutlined /></IconButton>
-                            <IconButton size="small" color="warning" onClick={() => handleEdit(item)}><EditOutlined /></IconButton>
-                            <IconButton size="small" color="error" onClick={() => handleDelete(item.id)}><DeleteOutlined /></IconButton>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {pagedMenuItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                        ពុំមានទិន្នន័យ Menu ត្រូវបានរកឃើញឡើយ
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    pagedMenuItems.map((item, index) => {
+                      const catStyle = getCategoryColor(item.category_id);
+                      const isAvailable = Number(item.is_available) === 1 || item.status === 'Available';
+                      const imageUrl = item.image
+                        ? item.image.startsWith('http')
+                          ? item.image
+                          : `${SERVER_URL}${item.image}`
+                        : '';
+
+                      return (
+                        <TableRow key={item.id} hover>
+                          <TableCell>{(page - 1) * itemsPerPage + index + 1}</TableCell>
+                          <TableCell>
+                            <Avatar
+                              src={imageUrl}
+                              variant="rounded"
+                              sx={{ width: 42, height: 42, bgcolor: '#f1f5f9' }}
+                            >
+                              <BellOutlined />
+                            </Avatar>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="bold">
+                              {item.name}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={item.category_name || item.category || 'Uncategorized'}
+                              size="small"
+                              sx={{ bgcolor: catStyle.bg, color: catStyle.color, fontWeight: 'bold' }}
+                            />
+                          </TableCell>
+                          <TableCell>${Number(item.price).toFixed(2)}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={isAvailable ? 'Available' : 'Unavailable'}
+                              size="small"
+                              sx={{
+                                bgcolor: isAvailable ? '#dcfce7' : '#fee2e2',
+                                color: isAvailable ? '#15803d' : '#b91c1c',
+                                fontWeight: 'bold'
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Stack direction="row" spacing={0.5} justifyContent="center">
+                              <IconButton size="small" color="warning" onClick={() => handleEdit(item)}>
+                                <EditOutlined />
+                              </IconButton>
+                              <IconButton size="small" color="error" onClick={() => handleDelete(item.id)}>
+                                <DeleteOutlined />
+                              </IconButton>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
               <Typography variant="body2" color="text.secondary">
-                Showing 1 to {menuItems.length} of {menuItems.length} items
+                Showing {pagedMenuItems.length} of {filteredMenuItems.length} items
               </Typography>
-              <Pagination count={Math.max(1, Math.ceil(menuItems.length / 8))} color="primary" shape="rounded" />
+              <Pagination
+                count={Math.max(1, Math.ceil(filteredMenuItems.length / itemsPerPage))}
+                page={page}
+                onChange={(e, value) => setPage(value)}
+                color="primary"
+                shape="rounded"
+              />
             </Box>
           </Paper>
         </Grid>
@@ -334,121 +459,121 @@ const MenuPage = () => {
         {/* 3. Add / Edit Menu Form Panel */}
         {showAddForm && (
           <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 2.5, borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
-              <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" fontWeight="bold">
-                  {editingId ? 'Edit Menu' : 'Add New Menu'}
-                </Typography>
-                <IconButton size="small" onClick={() => { setShowAddForm(false); resetForm(); }}>
+            <Paper sx={{ p: 3, borderRadius: 3, boxShadow: cardShadow, position: 'sticky', top: 20 }}>
+              <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
+                <Box>
+                  <Typography variant="h6" fontWeight="bold">
+                    {editingId ? 'Edit Menu' : 'Add New Menu'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {editingId ? 'ធ្វើបច្ចុប្បន្នភាពព័ត៌មានមុខម្ហូប' : 'បំពេញព័ត៌មានដើម្បីបង្កើតមុខម្ហូបថ្មី'}
+                  </Typography>
+                </Box>
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setShowAddForm(false);
+                    resetForm();
+                  }}
+                >
                   <UpOutlined />
                 </IconButton>
               </Stack>
 
               <form onSubmit={handleSaveMenu}>
-                <Stack spacing={2}>
-                  {/* Image Upload */}
+                <Stack spacing={2.5} sx={{ mt: 2 }}>
+                  {/* Image Upload — Dropzone */}
                   <Box>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                      Upload Food Image <span style={{ color: 'red' }}>*</span>
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
+                      Food Image
                     </Typography>
                     <Box
+                      onClick={() => fileInputRef.current?.click()}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={handleDrop}
                       sx={{
-                        border: '2px dashed #cbd5e1',
+                        border: '2px dashed',
+                        borderColor: 'divider',
+                        bgcolor: '#fafafa',
                         borderRadius: 2,
-                        p: 2,
+                        p: imagePreview ? 1.5 : 3,
                         textAlign: 'center',
-                        bgcolor: '#f8fafc',
                         cursor: 'pointer',
-                        '&:hover': { borderColor: '#2563eb', bgcolor: '#eff6ff' }
+                        transition: 'all 0.15s ease',
+                        '&:hover': { borderColor: 'primary.main', bgcolor: '#f5f8ff' }
                       }}
-                      component="label"
                     >
-                      <input type="file" accept="image/*" hidden onChange={handleImageChange} />
-                      {formData.imagePreview ? (
+                      <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleImageChange} />
+                      {imagePreview ? (
                         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <img
-                            src={formData.imagePreview}
+                          <Box
+                            component="img"
+                            src={imagePreview}
                             alt="Preview"
-                            style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }}
+                            sx={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 2, mb: 1 }}
                           />
-                          <Typography variant="caption" color="primary">Click to change image</Typography>
+                          <Typography variant="caption" color="primary">
+                            ចុចដើម្បីប្តូររូបភាព
+                          </Typography>
                         </Box>
                       ) : (
                         <>
                           <CloudUploadOutlined style={{ fontSize: 32, color: '#64748b' }} />
                           <Typography variant="body2" fontWeight="medium" sx={{ mt: 1 }}>
-                            Click to upload or drag and drop
+                            ចុច ឬអូសរូបភាពមកដាក់ត្រង់នេះ
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            PNG, JPG or WEBP (Max. 2MB)
+                            JPG, PNG, GIF, WEBP — មិនលើស 2MB
                           </Typography>
                         </>
                       )}
                     </Box>
                   </Box>
 
-                  {/* Menu Code */}
-                  <Box>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                      Menu Code <span style={{ color: 'red' }}>*</span>
-                    </Typography>
-                    <TextField
-                      name="code"
-                      value={formData.code}
-                      onChange={handleChange}
-                      placeholder="Enter menu code (e.g. MN001)"
-                      size="small"
-                      fullWidth
-                    />
-                  </Box>
-
                   {/* Menu Name */}
                   <Box>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                      Menu Name <span style={{ color: 'red' }}>*</span>
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
+                      Menu Name <span style={{ color: '#d32f2f' }}>*</span>
                     </Typography>
-                    <TextField
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      placeholder="Enter menu name"
-                      size="small"
-                      fullWidth
-                    />
+                    <TextField name="name" value={formData.name} onChange={handleChange} placeholder="Enter menu name" size="medium" fullWidth />
                   </Box>
 
                   {/* Category */}
-                  <FormControl fullWidth size="small">
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                      Category <span style={{ color: 'red' }}>*</span>
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
+                      Category <span style={{ color: '#d32f2f' }}>*</span>
                     </Typography>
-                    <Select
-                      name="category"
-                      value={formData.category}
-                      onChange={handleChange}
-                      displayEmpty
-                    >
-                      <MenuItem value="" disabled>Select category</MenuItem>
-                      {categoryOptions.map((cat) => (
-                        <MenuItem key={cat} value={cat}>{cat}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                    <FormControl fullWidth>
+                      <Select name="category_id" value={formData.category_id} onChange={handleChange} displayEmpty>
+                        <MenuItem value="" disabled>
+                          Select category
+                        </MenuItem>
+                        {categories.map((cat) => (
+                          <MenuItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    {categories.length === 0 && (
+                      <Typography variant="caption" color="error">
+                        មិនទាន់មាន Category ទេ — សូមទៅបង្កើតនៅទំព័រ Categories មុនសិន
+                      </Typography>
+                    )}
+                  </Box>
 
                   {/* Price */}
                   <Box>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                      Price <span style={{ color: 'red' }}>*</span>
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
+                      Price <span style={{ color: '#d32f2f' }}>*</span>
                     </Typography>
                     <TextField
                       name="price"
                       value={formData.price}
                       onChange={handleChange}
-                      placeholder="Enter price"
+                      placeholder="0.00"
                       type="number"
-                      size="small"
+                      size="medium"
                       fullWidth
                       InputProps={{
                         startAdornment: <InputAdornment position="start">$</InputAdornment>
@@ -456,42 +581,31 @@ const MenuPage = () => {
                     />
                   </Box>
 
-                  {/* Description */}
-                  <Box>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>Description</Typography>
-                    <TextField
-                      name="description"
-                      value={formData.description}
-                      onChange={handleChange}
-                      placeholder="Enter description"
-                      multiline
-                      rows={3}
-                      size="small"
-                      fullWidth
-                    />
-                  </Box>
-
                   {/* Status */}
                   <FormControl>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                      Status <span style={{ color: 'red' }}>*</span>
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
+                      Status <span style={{ color: '#d32f2f' }}>*</span>
                     </Typography>
                     <RadioGroup row name="status" value={formData.status} onChange={handleChange}>
-                      <FormControlLabel value="Available" control={<Radio size="small" />} label="Available" />
-                      <FormControlLabel value="Unavailable" control={<Radio size="small" />} label="Unavailable" />
+                      <FormControlLabel value="1" control={<Radio size="small" />} label="Available" />
+                      <FormControlLabel value="0" control={<Radio size="small" />} label="Unavailable" />
                     </RadioGroup>
                   </FormControl>
 
                   {/* Buttons */}
                   <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-                    <Button type="submit" variant="contained" fullWidth startIcon={<PlusOutlined />}>
+                    <Button type="submit" variant="contained" size="large" fullWidth startIcon={<PlusOutlined />}>
                       {editingId ? 'Update Menu' : 'Save Menu'}
                     </Button>
                     <Button
                       variant="outlined"
                       color="secondary"
+                      size="large"
                       fullWidth
-                      onClick={() => { resetForm(); setShowAddForm(false); }}
+                      onClick={() => {
+                        resetForm();
+                        setShowAddForm(false);
+                      }}
                     >
                       Cancel
                     </Button>

@@ -1,33 +1,33 @@
-
+//សម្រាប់ទា​ui បកប្រើ
 import PropTypes from 'prop-types';
 import React from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 
-// material-ui
-import Alert from '@mui/material/Alert';
-import Button from '@mui/material/Button';
-import Checkbox from '@mui/material/Checkbox';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import FormHelperText from '@mui/material/FormHelperText';
-import Grid from '@mui/material/Grid';
-import Link from '@mui/material/Link';
-import InputAdornment from '@mui/material/InputAdornment';
-import InputLabel from '@mui/material/InputLabel';
-import OutlinedInput from '@mui/material/OutlinedInput';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
+// ឌីហ្សាញform login
+import Alert from '@mui/material/Alert'; //ជូនដំណឹង
+import Button from '@mui/material/Button'; //somrab joch
+import Checkbox from '@mui/material/Checkbox'; //box crish
+import FormControlLabel from '@mui/material/FormControlLabel'; //keep me sigin
+import FormHelperText from '@mui/material/FormHelperText';   //bong hanh error
+import Grid from '@mui/material/Grid';  //
+import Link from '@mui/material/Link';  //forget password
+import InputAdornment from '@mui/material/InputAdornment';   //pneak mel password
+import InputLabel from '@mui/material/InputLabel';    //titile email
+import OutlinedInput from '@mui/material/OutlinedInput';  //type em and pass
+import Stack from '@mui/material/Stack';  //reab rlement
+import Typography from '@mui/material/Typography'; //text atha bot jol form
 
 // third-party
-import * as Yup from 'yup';
-import { Formik } from 'formik';
+import * as Yup from 'yup'; // check email trov form ot
+import { Formik } from 'formik';  //krobkrong form value rbos email password chab error ...
 
 // project imports
-import IconButton from 'components/@extended/IconButton';
-import AnimateButton from 'components/@extended/AnimateButton';
+import IconButton from 'components/@extended/IconButton'; //botton cute cute
+import AnimateButton from 'components/@extended/AnimateButton';//them animetion oy button
 
 // assets
-import EyeOutlined from '@ant-design/icons/EyeOutlined';
-import EyeInvisibleOutlined from '@ant-design/icons/EyeInvisibleOutlined';
+import EyeOutlined from '@ant-design/icons/EyeOutlined';//pneack hide password
+import EyeInvisibleOutlined from '@ant-design/icons/EyeInvisibleOutlined';//
 
 // ============================ JWT - LOGIN ============================ //
 
@@ -51,44 +51,47 @@ initialValues={{
 email: '',
 password: '',
 submit: null
-}}
+}}//
+   ///សំខាន់កាពារ​ user​​វាយខុស
 validationSchema={Yup.object().shape({
 email: Yup.string().email('Must be a valid email').max(255).required('Email is required'),
 password: Yup.string()
 .required('Password is required')
 .test('no-leading-trailing-whitespace', 'Password cannot start or end with spaces', (value) => value === value.trim())
 .max(255, 'Password must be less than 255 characters')
-})}
-// 🟢 Handle Login Submission & Validation
+})}//check data befor acecc to submit
+
+//  Handle Login Submission & Validation សំខាន់គ្រប់គ្រងកា login បង្ហាញ alert
 onSubmit={async (values, { setErrors, setStatus, setSubmitting }) => {
 try {
-// 🟢 បំប្លែង Email ទៅជាអក្សរតូច ដើម្បីកុំឱ្យប្រកាន់ Case-sensitivity
+//  បំប្លែង Email ទៅជាអក្សរតូច ដើម្បីកុំឱ្យប្រកាន់ Case-sensitivity
 const inputEmail = values.email.toLowerCase();
 const inputPassword = values.password;
 
-// 🟢 Check Fake Credentials (អាចដូរតាមចិត្ត)
+//  Check Fake Credentials ()
 if (inputEmail !== 'jethnitt@gmail.com' || inputPassword !== 'Nit130905') {
 throw new Error('Email ឬ ពាក្យសម្ងាត់មិនត្រឹមត្រូវឡើយ!');
 }
 
-// 🟢 បើត្រូវ៖ បង្កើត Token រក្សាទុក រួចរុញទៅ Dashboard
+          //  បើត្រូវ  រក្សាទុក រួចរុញទៅ Dashboard
 localStorage.setItem('token', 'sample_jwt_token_12345');
 setStatus({ success: true });
 setSubmitting(false);
 
 navigate('/');
 } catch (err) {
-// 🔴 បើខុស៖ បង្ហាញ Error Alert
+//  បើខុស បង្ហាញ Error Alert
 setStatus({ success: false });
 setErrors({ submit: err.message || 'ការចូលប្រើប្រាស់បរាជ័យ!' });
 setSubmitting(false);
 }
 }}
 >
+    
 {({ errors, handleBlur, handleChange, handleSubmit, isSubmitting, touched, values }) => (
 <form noValidate onSubmit={handleSubmit}>
 <Grid container spacing={3}>
-{/* 🔴 បង្ហាញ Alert ពណ៌ក្រហមប្រាប់ User ពេលវាយខុស */}
+{/*  បង្ហាញ Alert ពណ៌ក្រហមប្រាប់ User ពេលវាយខុស */}
 {errors.submit && (
 <Grid size={12}>
 <Alert severity="error">{errors.submit}</Alert>
@@ -105,18 +108,19 @@ id="email-login"
 type="email"
 value={values.email}
 name="email"
-autoComplete="off" // 🟢 បិទ Chrome Auto-fill
+autoComplete="off" //  បិទ Chrome Auto-fill
 onBlur={handleBlur}
 onChange={handleChange}
 placeholder="Enter email address"
 fullWidth
 error={Boolean(touched.email && errors.email)}
 />
+
 </Stack>
 {touched.email && errors.email && (
 <FormHelperText error id="standard-weight-helper-text-email-login">
 {errors.email}
-</FormHelperText>
+</FormHelperText> //if fals data error
 )}
 </Grid>
 
@@ -130,7 +134,7 @@ id="password-login"
 type={showPassword ? 'text' : 'password'}
 value={values.password}
 name="password"
-autoComplete="new-password" // 🟢 បិទ Chrome Auto-fill
+autoComplete="new-password" //  បិទ Chrome Auto-fill
 onBlur={handleBlur}
 onChange={handleChange}
 endAdornment={

@@ -18,22 +18,8 @@ import { NumericFormat } from 'react-number-format';
 // project imports
 import Dot from 'components/@extended/Dot';
 
-function createData(tracking_no, name, fat, carbs, protein) {
-  return { tracking_no, name, fat, carbs, protein };
-}
-
-const rows = [
-  createData(84564564, 'Camera Lens', 40, 2, 40570),
-  createData(98764564, 'Laptop', 300, 0, 180139),
-  createData(98756325, 'Mobile', 355, 1, 90989),
-  createData(98652366, 'Handset', 50, 1, 10239),
-  createData(13286564, 'Computer Accessories', 100, 1, 83348),
-  createData(86739658, 'TV', 99, 0, 410780),
-  createData(13256498, 'Keyboard', 125, 2, 70999),
-  createData(98753263, 'Mouse', 89, 2, 10570),
-  createData(98753275, 'Desktop', 185, 1, 98063),
-  createData(98753291, 'Chair', 100, 0, 14001)
-];
+// assets
+import InboxOutlined from '@ant-design/icons/InboxOutlined';
 
 function descendingComparator(a, b, orderBy) {
   if (b[orderBy] < a[orderBy]) {
@@ -63,35 +49,40 @@ function stableSort(array, comparator) {
 
 const headCells = [
   {
-    id: 'tracking_no',
+    id: 'order_no',
     align: 'left',
     disablePadding: false,
-    label: 'Tracking No.'
+    label: 'Order No.'
   },
   {
-    id: 'name',
+    id: 'table',
     align: 'left',
     disablePadding: true,
-    label: 'Product Name'
+    label: 'Table'
   },
   {
-    id: 'fat',
-    align: 'right',
-    disablePadding: false,
-    label: 'Total Order'
-  },
-  {
-    id: 'carbs',
+    id: 'customer',
     align: 'left',
     disablePadding: false,
-
+    label: 'Customer'
+  },
+  {
+    id: 'items',
+    align: 'right',
+    disablePadding: false,
+    label: 'Items'
+  },
+  {
+    id: 'status',
+    align: 'left',
+    disablePadding: false,
     label: 'Status'
   },
   {
-    id: 'protein',
+    id: 'amount',
     align: 'right',
     disablePadding: false,
-    label: 'Total Amount'
+    label: 'Amount'
   }
 ];
 
@@ -122,16 +113,28 @@ function OrderStatus({ status }) {
 
   switch (status) {
     case 0:
-      color = 'warning';
+      color = 'info';
       title = 'Pending';
       break;
     case 1:
-      color = 'success';
-      title = 'Approved';
+      color = 'warning';
+      title = 'Preparing';
       break;
     case 2:
+      color = 'secondary';
+      title = 'Ready';
+      break;
+    case 3:
+      color = 'primary';
+      title = 'Served';
+      break;
+    case 4:
+      color = 'success';
+      title = 'Completed';
+      break;
+    case 5:
       color = 'error';
-      title = 'Rejected';
+      title = 'Cancelled';
       break;
     default:
       color = 'primary';
@@ -146,11 +149,39 @@ function OrderStatus({ status }) {
   );
 }
 
-// ==============================|| ORDER TABLE ||============================== //
+// ==============================|| EMPTY STATE ||============================== //
+function EmptyState({ message = 'No data yet', height = 220 }) {
+  return (
+    <Box
+      sx={{
+        height,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 1,
+        color: 'text.secondary'
+      }}
+    >
+      <InboxOutlined style={{ fontSize: '1.75rem' }} />
+      <Typography variant="body2">{message}</Typography>
+    </Box>
+  );
+}
 
-export default function OrderTable() {
+// ==============================|| ORDER TABLE ||============================== //
+// `rows` — TODO (backend): pass real recent-orders data once the API is
+// connected, e.g. rows={orders} with each item shaped as:
+//   { order_no, table, customer, items, status, amount }
+// Until then it defaults to an empty array and the table shows
+// "No recent orders yet" instead of the old hardcoded sample rows.
+export default function OrderTable({ rows = [] }) {
   const order = 'asc';
-  const orderBy = 'tracking_no';
+  const orderBy = 'order_no';
+
+  if (!rows || rows.length === 0) {
+    return <EmptyState message="No recent orders yet" />;
+  }
 
   return (
     <Box>
@@ -176,18 +207,19 @@ export default function OrderTable() {
                   role="checkbox"
                   sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
                   tabIndex={-1}
-                  key={row.tracking_no}
+                  key={row.order_no}
                 >
                   <TableCell component="th" id={labelId} scope="row">
-                    <Link sx={{ color: 'secondary.main' }}>{row.tracking_no}</Link>
+                    <Link sx={{ color: 'secondary.main' }}>#{row.order_no}</Link>
                   </TableCell>
-                  <TableCell>{row.name}</TableCell>
-                  <TableCell align="right">{row.fat}</TableCell>
+                  <TableCell>{row.table}</TableCell>
+                  <TableCell>{row.customer}</TableCell>
+                  <TableCell align="right">{row.items}</TableCell>
                   <TableCell>
-                    <OrderStatus status={row.carbs} />
+                    <OrderStatus status={row.status} />
                   </TableCell>
                   <TableCell align="right">
-                    <NumericFormat value={row.protein} displayType="text" thousandSeparator prefix="$" />
+                    <NumericFormat value={row.amount} displayType="text" thousandSeparator prefix="$" decimalScale={2} fixedDecimalScale />
                   </TableCell>
                 </TableRow>
               );
@@ -202,3 +234,5 @@ export default function OrderTable() {
 OrderTableHead.propTypes = { order: PropTypes.any, orderBy: PropTypes.string };
 
 OrderStatus.propTypes = { status: PropTypes.number };
+
+OrderTable.propTypes = { rows: PropTypes.array };

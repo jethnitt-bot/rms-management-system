@@ -5,10 +5,10 @@ import Loadable from 'components/Loadable';
 import DashboardLayout from 'layout/Dashboard';
 import ProtectedRoute from './protectedRoute';
 
-// render- Dashboard
+// render - Dashboard
 const DashboardDefault = Loadable(lazy(() => import('pages/dashboard/default')));
 
-// render - color
+// render - color / component overview
 const Color = Loadable(lazy(() => import('pages/component-overview/color')));
 const Typography = Loadable(lazy(() => import('pages/component-overview/typography')));
 const Shadow = Loadable(lazy(() => import('pages/component-overview/shadows')));
@@ -16,22 +16,20 @@ const Shadow = Loadable(lazy(() => import('pages/component-overview/shadows')));
 // render - sample page
 const SamplePage = Loadable(lazy(() => import('pages/extra-pages/sample-page')));
 
-// 🟢 Import User Management Page
+// 🟢 Import App Pages
 const UserManagement = Loadable(lazy(() => import('pages/userManagement')));
-
-// 🟢 Import Categories Page
 const Categories = Loadable(lazy(() => import('pages/categories')));
-
-// 🟢 Import Menu Page
 const MenuPage = Loadable(lazy(() => import('pages/menu')));
-
-// table តុៗ
 const TablesPage = Loadable(lazy(() => import('pages/tables')));
 
-// 🟢 Import Reservations Page
 const ReservationsPage = Loadable(lazy(() => import('pages/reservations')));
-
-// 🟢 Import Logout Page
+const OrdersPage = Loadable(lazy(() => import('pages/orders')));
+const KitchenPage = Loadable(lazy(() => import('pages/kitchen')));
+const BillingPage = Loadable(lazy(() => import('pages/Billing')));
+const InventoryPage = Loadable(lazy(() => import('pages/inventory')));
+const SuppliersPage = Loadable(lazy(() => import('pages/suppliers')));
+const ReportsPage = Loadable(lazy(() => import('pages/reports')));
+const SettingsPage = Loadable(lazy(() => import('pages/settings')));
 const Logout = Loadable(lazy(() => import('pages/Logout')));
 
 // ============================== MAIN ROUTING ============================== //
@@ -89,11 +87,39 @@ const MainRoutes = {
           path: 'tables',
           element: <TablesPage />
         },
+      
         {
           path: 'reservations',
           element: <ReservationsPage />
         },
-        // 🟢 Route សម្រាប់ Logout
+        {
+          path: 'orders',
+          element: <OrdersPage />
+        },
+        {
+          path: 'kitchen',
+          element: <KitchenPage />
+        },
+        {
+          path: 'billing',
+          element: <BillingPage />
+        },
+        {
+          path: 'inventory',
+          element: <InventoryPage />
+        },
+        {
+          path: 'suppliers',
+          element: <SuppliersPage />
+        },
+        {
+          path: 'reports',
+          element: <ReportsPage />
+        },
+        {
+          path: 'settings',
+          element: <SettingsPage />
+        },
         {
           path: 'logout',
           element: <Logout />

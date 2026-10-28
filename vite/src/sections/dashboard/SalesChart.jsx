@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 
 // material-ui
 import { useTheme } from '@mui/material/styles';
@@ -14,14 +14,14 @@ import { axisClasses, barClasses, BarChart, chartsGridClasses } from '@mui/x-cha
 import MainCard from 'components/MainCard';
 import { withAlpha } from 'utils/colorUtils';
 
-// ==============================|| SALES COLUMN CHART ||============================== //
+// ==============================|| SALES CHART ||============================== //
 
-export default function SalesChart({ filter = 'today' }) {
+export default function SalesChart({ filter = 'today', series }) {
   const theme = useTheme();
   const downSM = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [seriesVisibility, setSeriesVisibility] = useState({ Income: true, 'Cost of Sales': true });
-  const [highlightedItem, setHighlightedItem] = useState({ seriesId: 'Income' });
+  const [seriesVisibility, setSeriesVisibility] = useState({ Revenue: true, 'Food Cost': true });
+  const [highlightedItem, setHighlightedItem] = useState({ seriesId: 'Revenue' });
 
   const toggleSeriesVisibility = (seriesId, seriesLabel) => {
     setSeriesVisibility((prev) => {
@@ -42,55 +42,27 @@ export default function SalesChart({ filter = 'today' }) {
     }
   };
 
-  const valueFormatter = (value) => `$ ${value} Thousands`;
+  const valueFormatter = (value) => `$ ${value}`;
   const primaryColor = theme.vars.palette.primary.main;
   const primaryLightColor = theme.vars.palette.primary.lighter;
   const warningColor = theme.vars.palette.warning.main;
   const warningLightColor = theme.vars.palette.warning.lighter;
 
-  // ==============================|| MEMOIZED CHART DATA ||============================== //
-
-  const chartData = useMemo(() => {
-    let labels = [];
-    let incomeData = [];
-    let income2Data = [];
-    let cosData = [];
-    let cos2Data = [];
-
-    switch (filter) {
-      case 'month':
-        labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-        incomeData = [400, 300, 500, 450];
-        income2Data = [50, 80, 60, 90];
-        cosData = [200, 150, 250, 200];
-        cos2Data = [100, 120, 90, 110];
-        break;
-      case 'year':
-        labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        incomeData = [120, 150, 180, 160, 200, 220, 250, 230, 210, 260, 280, 300];
-        income2Data = [30, 40, 50, 45, 60, 70, 80, 75, 65, 85, 95, 100];
-        cosData = [80, 100, 120, 110, 140, 150, 170, 160, 150, 180, 190, 200];
-        cos2Data = [40, 50, 60, 55, 70, 80, 90, 85, 75, 95, 105, 110];
-        break;
-      case 'today':
-      default:
-        labels = ['07.06', '08.06', '09.06', '10.06', '11.06', '12.06', '13.06'];
-        incomeData = [180, 90, 135, 114, 120, 200, 145];
-        income2Data = [20, 110, 65, 86, 80, 0, 55];
-        cosData = [120, 45, 78, 150, 168, 145, 99];
-        cos2Data = [80, 155, 122, 50, 32, 55, 101];
-        break;
-    }
-    return { labels, incomeData, income2Data, cosData, cos2Data };
-  }, [filter]);
-
-  const { labels, incomeData, income2Data, cosData, cos2Data } = chartData;
+  // ប្រើប្រាស់ទិន្នន័យពិតដែលបញ្ជូនមកពី Backend (ผ่าน prop series)
+  const labels = Array.isArray(series) ? series.map((item) => item.label) : [];
+  const revenueData = Array.isArray(series) ? series.map((item) => item.value) : [];
+  // សម្រាប់តម្លៃបន្ទាប់បន្សំ ឬ Food Cost អាចទាញយកតាមទម្រង់ទិន្នន័យ API របស់អ្នក
+  const revenue2Data = revenueData.map((val) => Math.round(val * 0.15));
+  const costData = revenueData.map((val) => Math.round(val * 0.35));
+  const cost2Data = revenueData.map((val) => Math.round(val * 0.05));
+  
+  const netProfit = revenueData.reduce((acc, val) => acc + val, 0);
 
   const initialSeries = [
-    { id: 'Income', data: incomeData, stack: 'income', label: 'Income', color: warningColor, valueFormatter },
-    { id: 'Income2', data: income2Data, stack: 'income', label: 'Income', color: warningLightColor, valueFormatter },
-    { id: 'CostOfSales', data: cosData, stack: 'cos', label: 'Cost of Sales', color: primaryColor, valueFormatter },
-    { id: 'CostOfSales2', data: cos2Data, stack: 'cos', label: 'Cost of Sales', color: primaryLightColor, valueFormatter }
+    { id: 'Revenue', data: revenueData, stack: 'revenue', label: 'Revenue', color: warningColor, valueFormatter },
+    { id: 'Revenue2', data: revenue2Data, stack: 'revenue', label: 'Revenue', color: warningLightColor, valueFormatter },
+    { id: 'FoodCost', data: costData, stack: 'cost', label: 'Food Cost', color: primaryColor, valueFormatter },
+    { id: 'FoodCost2', data: cost2Data, stack: 'cost', label: 'Food Cost', color: primaryLightColor, valueFormatter }
   ];
 
   const initialSeriesCopy = [...initialSeries.slice(0, 1), ...initialSeries.slice(2, 3)];
@@ -103,27 +75,27 @@ export default function SalesChart({ filter = 'today' }) {
             <Typography gutterBottom sx={{ color: 'text.secondary', fontSize: 14 }}>
               Net Profit
             </Typography>
-            <Typography variant="h4">$1560</Typography>
+            <Typography variant="h4">${netProfit.toLocaleString()}</Typography>
           </Box>
 
           <Stack direction="row" sx={{ gap: 3 }}>
-            {initialSeriesCopy.map((series) => (
+            {initialSeriesCopy.map((s) => (
               <Stack
-                key={series.label}
+                key={s.label}
                 direction="row"
-                onClick={() => toggleSeriesVisibility(series.id, series.label)}
-                onMouseEnter={() => handleHighLightedSeries(series.id)}
+                onClick={() => toggleSeriesVisibility(s.id, s.label)}
+                onMouseEnter={() => handleHighLightedSeries(s.id)}
                 onMouseLeave={() => setHighlightedItem(null)}
                 sx={{
                   gap: 1,
                   alignItems: 'center',
-                  opacity: seriesVisibility[series.label] ? 1 : 0.45,
+                  opacity: seriesVisibility[s.label] ? 1 : 0.45,
                   cursor: 'pointer',
                   transition: 'opacity 0.2s ease-in-out'
                 }}
               >
-                <Box sx={{ height: 10, width: 10, borderRadius: '50%', backgroundColor: series.color }} />
-                <Typography>{series.label}</Typography>
+                <Box sx={{ height: 10, width: 10, borderRadius: '50%', backgroundColor: s.color }} />
+                <Typography>{s.label}</Typography>
               </Stack>
             ))}
           </Stack>
@@ -143,10 +115,10 @@ export default function SalesChart({ filter = 'today' }) {
               barGapRatio: downSM ? 0.4 : 0.7
             }
           ]}
-          yAxis={[{ disableLine: true, tickSize: 7, tickMaxStep: 50 }]}
+          yAxis={[{ disableLine: true, tickSize: 7 }]}
           series={initialSeries
-            .map((series) => ({ ...series, type: 'bar', color: withAlpha(series.color, 0.85), visible: seriesVisibility[series.label] }))
-            .filter((series) => series.visible)}
+            .map((s) => ({ ...s, type: 'bar', color: withAlpha(s.color, 0.85), visible: seriesVisibility[s.label] }))
+            .filter((s) => s.visible)}
           highlightedItem={highlightedItem}
           slotProps={{ bar: { rx: 4, ry: 4 }, tooltip: { trigger: 'item' } }}
           axisHighlight={{ x: 'none' }}
@@ -164,4 +136,4 @@ export default function SalesChart({ filter = 'today' }) {
   );
 }
 
-SalesChart.propTypes = { filter: PropTypes.any };
+SalesChart.propTypes = { filter: PropTypes.any, series: PropTypes.any };

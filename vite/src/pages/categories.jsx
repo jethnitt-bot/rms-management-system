@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Grid,
   Card,
@@ -13,213 +13,282 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
-  Avatar,
   IconButton,
   Stack,
-  MenuItem,
-  Select,
-  FormControl,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
   Box,
-  Pagination
+  InputAdornment,
+  Avatar,
+  Divider
 } from '@mui/material';
 import {
   AppstoreOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  FileTextOutlined,
   PlusOutlined,
   EditOutlined,
-  DeleteOutlined,
-  FilterOutlined,
+  CloseOutlined,
+  SearchOutlined,
   CloudUploadOutlined,
-  CloseOutlined
+  DeleteOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  TagsOutlined
 } from '@ant-design/icons';
 
-// 1. Initial Dummy Data
-const initialCategories = [
-  { id: 1, name: 'Appetizers', description: 'Start your meal with our delicious appetizers.', itemsCount: 15, status: 'Active', image: 'https://images.unsplash.com/photo-1541529086526-db283c563270?w=100' },
-  { id: 2, name: 'Main Course', description: 'Hearty and tasty main course dishes.', itemsCount: 45, status: 'Active', image: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=100' },
-  { id: 3, name: 'Desserts', description: 'Sweet treats to complete your meal.', itemsCount: 12, status: 'Active', image: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=100' },
-  { id: 4, name: 'Beverages', description: 'Refreshing drinks and beverages.', itemsCount: 18, status: 'Active', image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=100' },
-  { id: 5, name: 'Fast Food', description: 'Quick and delicious fast food.', itemsCount: 20, status: 'Active', image: 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?w=100' },
-  { id: 6, name: 'Soups', description: 'Warm and tasty soup varieties.', itemsCount: 8, status: 'Active', image: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=100' },
-  { id: 7, name: 'Salads', description: 'Healthy and fresh salad options.', itemsCount: 10, status: 'Active', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=100' },
-  { id: 8, name: 'Bread & Bakery', description: 'Freshly baked bread and bakery.', itemsCount: 6, status: 'Active', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=100' },
-  { id: 9, name: 'Sauces & Dips', description: 'Flavourful sauces and dips.', itemsCount: 4, status: 'Active', image: 'https://images.unsplash.com/photo-1472476443507-c7a5948772fc?w=100' },
-  { id: 10, name: 'Others', description: 'Other special items and extras.', itemsCount: 2, status: 'Inactive', image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=100' }
-];
-
 const Categories = () => {
-  const [categories, setCategories] = useState(initialCategories);
+  const [categories, setCategories] = useState([]);
   const [showAddForm, setShowAddForm] = useState(true);
   const [editingId, setEditingId] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
 
-  // Form State
+  // Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Form State (មាន name និង imageFile)
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    status: 'Active',
-    image: null,
-    imagePreview: ''
+    name: ''
   });
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
 
-  // Handle Text Inputs
+  // Base Server URL & API URL
+  const SERVER_URL = 'http://localhost/rms_backend/';
+  const API_URL = 'http://localhost/rms_backend/api/categories/categories.php';
+
+  const cardShadow = '0 2px 10px rgba(0,0,0,0.04)';
+
+  // Fetch Categories ពី PHP Backend
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setCategories(data);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  // Handle Text Changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Handle Image Upload & Preview
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert('សូមជ្រើសរើសរូបភាពដែលមានទំហំតូចជាង 2MB!');
-        return;
-      }
-      const previewUrl = URL.createObjectURL(file);
-      setFormData((prev) => ({
-        ...prev,
-        image: file,
-        imagePreview: previewUrl
-      }));
+  // Handle File Change (input ឬ drag & drop ហៅមកដូចគ្នា)
+  const applySelectedFile = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('សូមជ្រើសរើសតែឯកសាររូបភាព (JPG, PNG, GIF, WEBP)!');
+      return;
     }
+    setSelectedFile(file);
+    setImagePreview(URL.createObjectURL(file));
   };
 
-  // Handle Drag and Drop Image
+  const handleFileChange = (e) => {
+    applySelectedFile(e.target.files[0]);
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      const previewUrl = URL.createObjectURL(file);
-      setFormData((prev) => ({
-        ...prev,
-        image: file,
-        imagePreview: previewUrl
-      }));
-    }
+    setIsDragging(false);
+    applySelectedFile(e.dataTransfer.files[0]);
   };
 
-  // Save / Update Category Function
-  const handleSaveCategory = (e) => {
+  const handleRemoveImage = (e) => {
+    e.stopPropagation();
+    setSelectedFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Save / Update Category ប្រើ FormData
+  const handleSaveCategory = async (e) => {
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      alert('សូមបញ្ចូល Category Name!');
+      alert('សូមបញ្ចូលឈ្មោះ Category!');
       return;
     }
 
+    const dataToSend = new FormData();
+    dataToSend.append('name', formData.name);
+
     if (editingId) {
-      // ករណី Edit
-      setCategories(
-        categories.map((cat) =>
-          cat.id === editingId
-            ? {
-                ...cat,
-                name: formData.name,
-                description: formData.description,
-                status: formData.status,
-                image: formData.imagePreview || cat.image
-              }
-            : cat
-        )
-      );
-      setEditingId(null);
-    } else {
-      // ករណី Add ថ្មី
-      const newCategory = {
-        id: categories.length + 1,
-        name: formData.name,
-        description: formData.description || 'No description provided.',
-        itemsCount: 0,
-        status: formData.status,
-        image: formData.imagePreview || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100'
-      };
-      setCategories([...categories, newCategory]);
+      dataToSend.append('id', editingId);
     }
 
-    // Reset Form
-    resetForm();
+    if (selectedFile) {
+      dataToSend.append('image', selectedFile);
+    }
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        body: dataToSend
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.message || 'មានបញ្ហាកើតឡើង!');
+        return;
+      }
+
+      alert(result.message || 'រក្សាទុកជោគជ័យ!');
+      fetchCategories();
+      resetForm();
+    } catch (error) {
+      console.error('Error connecting to API:', error);
+      alert('មិនអាចតភ្ជាប់ទៅកាន់ API បានទេ!');
+    }
   };
 
   // Edit Action
   const handleEdit = (category) => {
     setEditingId(category.id);
     setFormData({
-      name: category.name,
-      description: category.description,
-      status: category.status,
-      image: null,
-      imagePreview: category.image
+      name: category.name || ''
     });
+    setSelectedFile(null);
+    if (category.image) {
+      setImagePreview(SERVER_URL + category.image);
+    } else {
+      setImagePreview(null);
+    }
     setShowAddForm(true);
   };
 
-  // Delete Action
-  const handleDelete = (id) => {
-    if (window.confirm('តើអ្នកពិតជាចង់លុប Category នេះមែនទេ?')) {
-      setCategories(categories.filter((cat) => cat.id !== id));
-    }
-  };
-
-  // Reset Form Action
+  // Reset Form
   const resetForm = () => {
-    setFormData({
-      name: '',
-      description: '',
-      status: 'Active',
-      image: null,
-      imagePreview: ''
-    });
+    setFormData({ name: '' });
+    setSelectedFile(null);
+    setImagePreview(null);
     setEditingId(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Calculate Stat Cards Values dynamically
+  // Filter Logic
+  const filteredCategories = useMemo(() => {
+    return categories.filter((cat) => {
+      const catName = cat.name || '';
+      return catName.toLowerCase().includes(searchTerm.toLowerCase());
+    });
+  }, [categories, searchTerm]);
+
+  // Calculated Stats
   const totalCategories = categories.length;
-  const activeCategories = categories.filter((c) => c.status === 'Active').length;
-  const inactiveCategories = categories.filter((c) => c.status === 'Inactive').length;
-  const totalMenuItems = categories.reduce((sum, c) => sum + c.itemsCount, 0);
+  // สมมติฐานตัวเลขจำลองสำหรับ Stat Cards อื่นๆ 
+  const activeCount = totalCategories; 
+  const featuredCount = Math.min(totalCategories, 3);
+  const recentCount = categories.filter(cat => {
+    if (!cat.created_at) return false;
+    const createdDate = new Date(cat.created_at);
+    const now = new Date();
+    const diffTime = Math.abs(now - createdDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 7;
+  }).length;
 
   return (
     <Box sx={{ p: 1 }}>
-      {/* 1. Stat Cards */}
+      {/* 1. Stat Cards (4 ប្រអប់ផ្សេងគ្នា)[cite: 10] */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        {[
-          { title: 'Total Categories', count: totalCategories, icon: <AppstoreOutlined />, color: '#2563eb', bg: '#eff6ff', sub: 'Categories' },
-          { title: 'Active Categories', count: activeCategories, icon: <CheckCircleOutlined />, color: '#16a34a', bg: '#f0fdf4', sub: 'Categories' },
-          { title: 'Inactive Categories', count: inactiveCategories, icon: <CloseCircleOutlined />, color: '#dc2626', bg: '#fef2f2', sub: 'Categories' },
-          { title: 'Total Menu Items', count: totalMenuItems, icon: <FileTextOutlined />, color: '#d97706', bg: '#fffbeb', sub: 'Items' }
-        ].map((card, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card sx={{ borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
-              <CardContent>
-                <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                  <Avatar sx={{ bgcolor: card.bg, color: card.color, width: 52, height: 52, borderRadius: 3 }}>
-                    {card.icon}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" fontWeight="medium">{card.title}</Typography>
-                    <Typography variant="h4" fontWeight="bold">{card.count}</Typography>
-                    <Typography variant="caption" color="text.secondary">{card.sub}</Typography>
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ borderRadius: 3, boxShadow: cardShadow, height: '100%' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+                <Box sx={{ bgcolor: '#eff6ff', color: '#2563eb', p: 1.5, borderRadius: 3, display: 'flex' }}>
+                  <AppstoreOutlined style={{ fontSize: 24 }} />
+                </Box>
+                <Box>
+                  <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                    Total Categories
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold">
+                    {totalCategories}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ borderRadius: 3, boxShadow: cardShadow, height: '100%' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+                <Box sx={{ bgcolor: '#f0fdf4', color: '#16a34a', p: 1.5, borderRadius: 3, display: 'flex' }}>
+                  <CheckCircleOutlined style={{ fontSize: 24 }} />
+                </Box>
+                <Box>
+                  <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                    Active Categories
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold">
+                    {activeCount}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ borderRadius: 3, boxShadow: cardShadow, height: '100%' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+                <Box sx={{ bgcolor: '#fef3c7', color: '#d97706', p: 1.5, borderRadius: 3, display: 'flex' }}>
+                  <TagsOutlined style={{ fontSize: 24 }} />
+                </Box>
+                <Box>
+                  <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                    Featured Groups
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold">
+                    {featuredCount}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ borderRadius: 3, boxShadow: cardShadow, height: '100%' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+                <Box sx={{ bgcolor: '#f3e8ff', color: '#9333ea', p: 1.5, borderRadius: 3, display: 'flex' }}>
+                  <ClockCircleOutlined style={{ fontSize: 24 }} />
+                </Box>
+                <Box>
+                  <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                    Added This Week
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold">
+                    {recentCount}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
 
-      {/* 2. Main Area (Table + Form) */}
-      <Grid container spacing={3}>
+      {/* 2. Main Area */}
+      <Grid container spacing={3} alignItems="flex-start">
         {/* Table Section */}
         <Grid item xs={12} md={showAddForm ? 8 : 12}>
-          <Paper sx={{ p: 2.5, borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
+          <Paper sx={{ p: 2.5, borderRadius: 3, boxShadow: cardShadow }}>
             <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h5" fontWeight="bold">Categories List</Typography>
+              <Typography variant="h5" fontWeight="bold">
+                Categories List
+              </Typography>
               {!showAddForm && (
                 <Button variant="contained" startIcon={<PlusOutlined />} onClick={() => setShowAddForm(true)}>
                   Add Category
@@ -229,13 +298,20 @@ const Categories = () => {
 
             {/* Filter Bar */}
             <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-              <TextField placeholder="Search category name..." size="small" fullWidth />
-              <Select defaultValue="All" size="small" sx={{ minWidth: 130 }}>
-                <MenuItem value="All">All Status</MenuItem>
-                <MenuItem value="Active">Active</MenuItem>
-                <MenuItem value="Inactive">Inactive</MenuItem>
-              </Select>
-              <Button variant="outlined" startIcon={<FilterOutlined />}>Filter</Button>
+              <TextField
+                placeholder="Search category name..."
+                size="small"
+                fullWidth
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchOutlined />
+                    </InputAdornment>
+                  )
+                }}
+              />
             </Stack>
 
             {/* Categories Table */}
@@ -243,177 +319,218 @@ const Categories = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>#</TableCell>
+                    <TableCell>ID</TableCell>
                     <TableCell>Image</TableCell>
                     <TableCell>Category Name</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell align="center">Menu Items</TableCell>
-                    <TableCell align="center">Status</TableCell>
+                    <TableCell>Created At</TableCell>
                     <TableCell align="center">Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {categories.map((cat, index) => (
-                    <TableRow key={cat.id} hover>
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell>
-                        <Avatar src={cat.image} variant="rounded" sx={{ width: 42, height: 42 }} />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="bold">{cat.name}</Typography>
-                      </TableCell>
-                      <TableCell sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        <Typography variant="body2" color="text.secondary">{cat.description}</Typography>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Chip label={cat.itemsCount} size="small" sx={{ bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 'bold' }} />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Chip
-                          label={cat.status}
-                          size="small"
-                          sx={{
-                            bgcolor: cat.status === 'Active' ? '#dcfce7' : '#fee2e2',
-                            color: cat.status === 'Active' ? '#15803d' : '#b91c1c',
-                            fontWeight: 'bold'
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Stack direction="row" spacing={0.5} justifyContent="center">
-                          <IconButton size="small" color="primary" onClick={() => handleEdit(cat)}>
-                            <EditOutlined />
-                          </IconButton>
-                          <IconButton size="small" color="error" onClick={() => handleDelete(cat.id)}>
-                            <DeleteOutlined />
-                          </IconButton>
-                        </Stack>
+                  {filteredCategories.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                        ពុំមានទិន្នន័យ Category ឡើយ
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredCategories.map((cat) => (
+                      <TableRow key={cat.id} hover>
+                        <TableCell>#{cat.id}</TableCell>
+                        <TableCell>
+                          <Avatar
+                            variant="rounded"
+                            src={cat.image ? `${SERVER_URL}${cat.image}` : ''}
+                            alt={cat.name}
+                            sx={{ width: 45, height: 45, bgcolor: '#f1f5f9' }}
+                          >
+                            <AppstoreOutlined />
+                          </Avatar>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight="bold">
+                            {cat.name}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">
+                            {cat.created_at || 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Stack direction="row" spacing={0.5} justifyContent="center">
+                            <IconButton size="small" color="primary" onClick={() => handleEdit(cat)}>
+                              <EditOutlined />
+                            </IconButton>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
-
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
-              <Typography variant="body2" color="text.secondary">
-                Showing 1 to {categories.length} of {categories.length} categories
-              </Typography>
-              <Pagination count={1} color="primary" shape="rounded" />
-            </Box>
           </Paper>
         </Grid>
 
         {/* 3. Add / Edit Category Form Panel */}
         {showAddForm && (
           <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 2.5, borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
-              <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" fontWeight="bold">
-                  {editingId ? 'Edit Category' : 'Add New Category'}
-                </Typography>
-                <IconButton size="small" onClick={() => { setShowAddForm(false); resetForm(); }}>
+            <Paper
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                boxShadow: cardShadow,
+                position: 'sticky',
+                top: 20
+              }}
+            >
+              <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
+                <Box>
+                  <Typography variant="h6" fontWeight="bold">
+                    {editingId ? 'Edit Category' : 'Add New Category'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {editingId ? 'ធ្វើបច្ចុប្បន្នភាពព័ត៌មាន Category' : 'បំពេញព័ត៌មានខាងក្រោមដើម្បីបង្កើត Category ថ្មី'}
+                  </Typography>
+                </Box>
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setShowAddForm(false);
+                    resetForm();
+                  }}
+                >
                   <CloseOutlined />
                 </IconButton>
               </Stack>
 
+              <Divider sx={{ my: 2.5 }} />
+
               <form onSubmit={handleSaveCategory}>
-                <Stack spacing={2}>
-                  {/* Category Name */}
+                <Stack spacing={3}>
+                  {/* Category Name Input */}
                   <Box>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                      Category Name <span style={{ color: 'red' }}>*</span>
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
+                      Category Name <span style={{ color: '#d32f2f' }}>*</span>
                     </Typography>
                     <TextField
                       name="name"
                       value={formData.name}
                       onChange={handleChange}
-                      placeholder="Enter category name"
-                      size="small"
+                      placeholder="e.g. Soups, Beverages, Desserts"
+                      size="medium"
                       fullWidth
                     />
                   </Box>
 
-                  {/* Description */}
+                  {/* Category Image — Dropzone Upload */}
                   <Box>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>Description</Typography>
-                    <TextField
-                      name="description"
-                      value={formData.description}
-                      onChange={handleChange}
-                      placeholder="Enter description"
-                      multiline
-                      rows={3}
-                      size="small"
-                      fullWidth
-                    />
-                  </Box>
-
-                  {/* Image Upload Box */}
-                  <Box>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                      Image <span style={{ color: 'red' }}>*</span>
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
+                      Category Image
                     </Typography>
+
                     <Box
-                      onDragOver={(e) => e.preventDefault()}
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDragging(true);
+                      }}
+                      onDragLeave={() => setIsDragging(false)}
                       onDrop={handleDrop}
                       sx={{
-                        border: '2px dashed #cbd5e1',
-                        borderRadius: 2,
-                        p: 2,
+                        position: 'relative',
+                        border: '2px dashed',
+                        borderColor: isDragging ? 'primary.main' : 'divider',
+                        bgcolor: isDragging ? 'primary.lighter' : '#fafafa',
+                        borderRadius: 3,
+                        p: imagePreview ? 1.5 : 4,
                         textAlign: 'center',
-                        bgcolor: '#f8fafc',
                         cursor: 'pointer',
-                        '&:hover': { borderColor: '#2563eb', bgcolor: '#eff6ff' }
+                        transition: 'all 0.15s ease',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          bgcolor: '#f5f8ff'
+                        }
                       }}
-                      component="label"
                     >
-                      <input type="file" accept="image/*" hidden onChange={handleImageChange} />
-                      {formData.imagePreview ? (
-                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <img
-                            src={formData.imagePreview}
+                      <input ref={fileInputRef} type="file" hidden accept="image/*" onChange={handleFileChange} />
+
+                      {imagePreview ? (
+                        <Box sx={{ position: 'relative', display: 'inline-block' }}>
+                          <Box
+                            component="img"
+                            src={imagePreview}
                             alt="Preview"
-                            style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }}
+                            sx={{
+                              width: '100%',
+                              maxWidth: 260,
+                              height: 160,
+                              borderRadius: 2,
+                              objectFit: 'cover',
+                              display: 'block',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                            }}
                           />
-                          <Typography variant="caption" color="primary">Click to change image</Typography>
+                          <IconButton
+                            size="small"
+                            onClick={handleRemoveImage}
+                            sx={{
+                              position: 'absolute',
+                              top: 6,
+                              right: 6,
+                              bgcolor: 'rgba(0,0,0,0.55)',
+                              color: '#fff',
+                              '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' }
+                            }}
+                          >
+                            <DeleteOutlined style={{ fontSize: 14 }} />
+                          </IconButton>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                            {selectedFile ? selectedFile.name : 'ចុចដើម្បីប្តូររូបភាព'}
+                          </Typography>
                         </Box>
                       ) : (
-                        <>
-                          <CloudUploadOutlined style={{ fontSize: 32, color: '#64748b' }} />
-                          <Typography variant="body2" fontWeight="medium" sx={{ mt: 1 }}>
-                            Click to upload image
+                        <Stack spacing={1} alignItems="center">
+                          <Box
+                            sx={{
+                              width: 56,
+                              height: 56,
+                              borderRadius: '50%',
+                              bgcolor: '#eff6ff',
+                              color: '#2563eb',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <CloudUploadOutlined style={{ fontSize: 26 }} />
+                          </Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            ចុច ឬអូសរូបភាពមកដាក់ត្រង់នេះ
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">or drag and drop</Typography>
-                          <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
-                            PNG, JPG or WEBP (Max. 2MB)
+                          <Typography variant="caption" color="text.secondary">
+                            JPG, PNG, GIF, WEBP — មិនលើស 2MB
                           </Typography>
-                        </>
+                        </Stack>
                       )}
                     </Box>
                   </Box>
 
-                  {/* Status Radio Buttons */}
-                  <FormControl>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                      Status <span style={{ color: 'red' }}>*</span>
-                    </Typography>
-                    <RadioGroup row name="status" value={formData.status} onChange={handleChange}>
-                      <FormControlLabel value="Active" control={<Radio size="small" />} label="Active" />
-                      <FormControlLabel value="Inactive" control={<Radio size="small" />} label="Inactive" />
-                    </RadioGroup>
-                  </FormControl>
-
-                  {/* Buttons */}
+                  {/* Submit / Cancel Buttons */}
                   <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-                    <Button type="submit" variant="contained" fullWidth startIcon={<PlusOutlined />}>
+                    <Button type="submit" variant="contained" size="large" fullWidth startIcon={<PlusOutlined />}>
                       {editingId ? 'Update Category' : 'Save Category'}
                     </Button>
                     <Button
                       variant="outlined"
                       color="secondary"
+                      size="large"
                       fullWidth
-                      onClick={() => { resetForm(); setShowAddForm(false); }}
+                      onClick={() => {
+                        resetForm();
+                        setShowAddForm(false);
+                      }}
                     >
                       Cancel
                     </Button>

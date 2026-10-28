@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Grid,
   Card,
@@ -25,7 +25,10 @@ import {
   Radio,
   Box,
   Pagination,
-  Divider
+  Divider,
+  Tooltip,
+  InputAdornment,
+  CircularProgress
 } from '@mui/material';
 import {
   BellOutlined,
@@ -37,90 +40,17 @@ import {
   EditOutlined,
   DeleteOutlined,
   CalendarOutlined,
-  UpOutlined,
   DollarOutlined,
   PrinterOutlined,
-  ArrowLeftOutlined
+  SearchOutlined,
+  CloseOutlined
 } from '@ant-design/icons';
 
-// 1. តារាងមើលភ្ញៀវបង់លុយមិនបង់លុយ
-//  Table ជាព័ត៌មានចម្បង (primary) - paymentStatus ជា "Pay Ready" / "Not Pay" សម្រាប់ការគិតលុយ
-
-
-const initialReservations = [
-  {
-    id: 'RES-001',
-    table: 'A01 - Row A / Window',
-    customerName: 'John Doe',
-    phone: '012 345 678',
-    date: '20 May 2024',
-    time: '7:00 PM',
-    guests: 5,
-    status: 'Confirmed',
-    paymentStatus: 'Not Pay',
-    orderItems: [
-      { name: 'Classic Burger', qty: 2, price: 5.0 },
-      { name: 'Orange Juice', qty: 2, price: 2.5 },
-      { name: 'Caesar Salad', qty: 1, price: 4.0 }
-    ]
-  },
-  {
-    id: 'RES-002',
-    table: 'A02 - Row A / Window',
-    customerName: 'Mary Jane',
-    phone: '012 876 543',
-    date: '20 May 2024',
-    time: '7:00 PM',
-    guests: 4,
-    status: 'Pending',
-    paymentStatus: 'Not Pay',
-    orderItems: [
-      { name: 'Margherita Pizza', qty: 1, price: 8.5 },
-      { name: 'Iced Coffee', qty: 2, price: 2.75 }
-    ]
-  },
-  {
-    id: 'RES-003',
-    table: 'B03 - Row B / Main Floor',
-    customerName: 'David Smith',
-    phone: '012 655 421',
-    date: '16 May 2024',
-    time: '7:00 PM',
-    guests: 4,
-    status: 'Seated',
-    paymentStatus: 'Pay Ready',
-    orderItems: [
-      { name: 'Spaghetti Carbonara', qty: 2, price: 7.5 },
-      { name: 'Cheesecake', qty: 1, price: 4.5 }
-    ]
-  },
-  {
-    id: 'RES-004',
-    table: 'B04 - Row B / Garden',
-    customerName: '',
-    phone: '',
-    date: '16 May 2024',
-    time: '7:00 PM',
-    guests: 3,
-    status: 'Cancelled',
-    paymentStatus: 'Not Pay',
-    orderItems: []
-  }
-];
-
-//  បញ្ជីតុ (ត្រូវផ្គូផ្គងជាមួយ Tables សម្រាប់គឹតលុយភ្ញៀវ)
-
-const tableOptions = [
-  'A01 - Row A / Window',
-  'A02 - Row A / Window',
-  'B03 - Row B / Main Floor',
-  'B04 - Row B / Garden',
-  'C05 - Row C / Window'
-];
+const API_BASE_URL = 'http://localhost/rms_backend/api';
 
 const getStatusColor = (status) => {
   switch (status) {
-    case 'Confirmed': return { bg: '#dbeafe', color: '#1d4ed8' };
+    case 'Confirmed': return { bg: '#e0f2fe', color: '#0369a1' };
     case 'Pending': return { bg: '#fef3c7', color: '#b45309' };
     case 'Seated': return { bg: '#dcfce7', color: '#15803d' };
     case 'Cancelled': return { bg: '#fee2e2', color: '#b91c1c' };
@@ -132,17 +62,22 @@ const getPaymentColor = (paymentStatus) =>
   paymentStatus === 'Pay Ready' ? { bg: '#dcfce7', color: '#15803d' } : { bg: '#fee2e2', color: '#b91c1c' };
 
 const ReservationsPage = () => {
-  const [reservations, setReservations] = useState(initialReservations);
-
-  // add reservation ថ្មី: 'add' | 'edit' | 'invoice'
-
+  const [reservations, setReservations] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingTables, setLoadingTables] = useState(false);
   const [panelMode, setPanelMode] = useState('add');
-  const [showPanel, setShowPanel] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [invoiceReservationId, setInvoiceReservationId] = useState(null);
 
+  // Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTable, setSelectedTable] = useState('All');
+
   const [formData, setFormData] = useState({
-    table: '',
+    table_id: '',
     customerName: '',
     phone: '',
     date: '',
@@ -152,6 +87,39 @@ const ReservationsPage = () => {
     status: 'Confirmed'
   });
 
+  const fetchTables = async () => {
+    setLoadingTables(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/tables/get_tables.php`);
+      const data = await res.json();
+      if (Array.isArray(data)) setTables(data);
+      else setTables([]);
+    } catch (err) {
+      console.error('Error fetching tables:', err);
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  const fetchReservations = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/reservations/get_reservations.php`);
+      const data = await res.json();
+      if (Array.isArray(data)) setReservations(data);
+      else setReservations([]);
+    } catch (err) {
+      console.error('Error fetching reservations:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTables();
+    fetchReservations();
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -159,7 +127,7 @@ const ReservationsPage = () => {
 
   const resetForm = () => {
     setFormData({
-      table: '',
+      table_id: '',
       customerName: '',
       phone: '',
       date: '',
@@ -174,90 +142,114 @@ const ReservationsPage = () => {
   const openAddForm = () => {
     resetForm();
     setPanelMode('add');
-    setInvoiceReservationId(null);
-    setShowPanel(true);
+    setShowInvoice(false);
+    setShowForm(true);
   };
-
-  // ចុចលើតុ បើក Invoice panel ជំនួស Add form
 
   const openInvoice = (reservation) => {
     setInvoiceReservationId(reservation.id);
-    setPanelMode('invoice');
-    setShowPanel(true);
+    setShowForm(false);
+    setShowInvoice(true);
   };
 
-  const handleSaveReservation = (e) => {
+  const handleSaveReservation = async (e) => {
     e.preventDefault();
-
-    if (!formData.table || !formData.date.trim() || !formData.time.trim()) {
+    if (!formData.table_id || !formData.date || !formData.time) {
       alert('សូមជ្រើសរើស Table និងបំពេញ Date & Time!');
       return;
     }
 
-    if (editingId) {
-      setReservations(
-        reservations.map((r) =>
-          r.id === editingId
-            ? {
-                ...r,
-                table: formData.table,
-                customerName: formData.customerName,
-                phone: formData.phone,
-                date: formData.date,
-                time: formData.time,
-                guests: parseInt(formData.guests, 10) || 0,
-                status: formData.status
-              }
-            : r
-        )
-      );
-      setEditingId(null);
-    } else {
-      const newReservation = {
-        id: `RES-${String(reservations.length + 1).padStart(3, '0')}`,
-        table: formData.table,
-        customerName: formData.customerName,
-        phone: formData.phone,
-        date: formData.date,
-        time: formData.time,
-        guests: parseInt(formData.guests, 10) || 0,
-        status: formData.status,
-        paymentStatus: 'Not Pay',
-        orderItems: []
-      };
-      setReservations([...reservations, newReservation]);
-    }
+    const payload = {
+      id: editingId,
+      table_id: formData.table_id,
+      customer_name: formData.customerName,
+      phone: formData.phone,
+      date: formData.date,
+      time: formData.time,
+      guests: parseInt(formData.guests, 10) || 1,
+      status: formData.status
+    };
 
-    resetForm();
-    setPanelMode('add');
+    try {
+      const endpoint = editingId ? 'update_reservation.php' : 'create_reservation.php';
+      const res = await fetch(`${API_BASE_URL}/reservations/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await res.json();
+      if (result.status === 'success' || res.ok) {
+        alert(editingId ? 'កែប្រែបានជោគជ័យ!' : 'បង្កើតការកក់បានជោគជ័យ!');
+        fetchReservations();
+        resetForm();
+        setShowForm(false);
+      } else {
+        alert(result.message || 'មានបញ្ហាក្នុងការរក្សាទុក!');
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      alert('មិនអាចភ្ជាប់ទៅកាន់ Server បានទេ!');
+    }
   };
 
-  const handleEdit = (reservation) => {
+  const handleEdit = (e, reservation) => {
+    e.stopPropagation();
     setEditingId(reservation.id);
     setFormData({
-      table: reservation.table,
-      customerName: reservation.customerName,
-      phone: reservation.phone,
-      date: reservation.date,
-      time: reservation.time,
-      guests: String(reservation.guests),
+      table_id: reservation.table_id || '',
+      customerName: reservation.customer_name || '',
+      phone: reservation.phone || '',
+      date: reservation.date || '',
+      time: reservation.time || '',
+      guests: String(reservation.guests || ''),
       specialRequests: '',
-      status: reservation.status
+      status: reservation.status || 'Confirmed'
     });
     setPanelMode('edit');
-    setShowPanel(true);
+    setShowInvoice(false);
+    setShowForm(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
     if (window.confirm('តើអ្នកពិតជាចង់លុប Reservation នេះមែនទេ?')) {
-      setReservations(reservations.filter((r) => r.id !== id));
+      try {
+        const res = await fetch(`${API_BASE_URL}/reservations/delete_reservation.php`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+        const result = await res.json();
+        if (result.status === 'success' || res.ok) {
+          fetchReservations();
+          if (invoiceReservationId === id) setShowInvoice(false);
+        } else {
+          alert(result.message || 'មិនអាចលុបបានទេ!');
+        }
+      } catch (err) {
+        console.error('Delete error:', err);
+      }
     }
   };
 
-  //   Invoice panel 
   const markAsPaid = (id) => {
     setReservations(reservations.map((r) => (r.id === id ? { ...r, paymentStatus: 'Pay Ready' } : r)));
   };
+
+  const filteredReservations = useMemo(() => {
+    return reservations.filter((r) => {
+      const search = searchTerm.toLowerCase();
+      const matchesSearch =
+        String(r.id).toLowerCase().includes(search) ||
+        (r.table_name && r.table_name.toLowerCase().includes(search)) ||
+        (r.customer_name && r.customer_name.toLowerCase().includes(search)) ||
+        (r.phone && r.phone.includes(search));
+
+      const matchesTable = selectedTable === 'All' || String(r.table_id) === String(selectedTable);
+      return matchesSearch && matchesTable;
+    });
+  }, [reservations, searchTerm, selectedTable]);
 
   const totalReservations = reservations.length;
   const confirmedCount = reservations.filter((r) => r.status === 'Confirmed').length;
@@ -265,351 +257,429 @@ const ReservationsPage = () => {
   const cancelledCount = reservations.filter((r) => r.status === 'Cancelled').length;
 
   const invoiceReservation = reservations.find((r) => r.id === invoiceReservationId);
-  const invoiceTotal = invoiceReservation
+  const invoiceTotal = invoiceReservation && invoiceReservation.orderItems
     ? invoiceReservation.orderItems.reduce((sum, item) => sum + item.qty * item.price, 0)
     : 0;
 
   return (
-    <Box sx={{ p: 1 }}>
-      {/* 1. Stat Cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
+    <Box sx={{ p: { xs: 1.5, md: 3 }, bgcolor: '#f8fafc', minHeight: '100vh' }}>
+      {/* Stat Cards */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
         {[
-          { title: 'Total Reservations', count: totalReservations, sub: `Today: ${totalReservations}`, icon: <BellOutlined />, color: '#2563eb', bg: '#dbeafe' },
+          { title: 'Total Reservations', count: totalReservations, sub: `Total: ${totalReservations}`, icon: <BellOutlined />, color: '#2563eb', bg: '#dbeafe' },
           { title: 'Confirmed', count: confirmedCount, sub: 'Confirmed', icon: <CheckCircleOutlined />, color: '#16a34a', bg: '#dcfce7' },
           { title: 'Pending', count: pendingCount, sub: 'Pending', icon: <ClockCircleOutlined />, color: '#d97706', bg: '#fef3c7' },
           { title: 'Cancelled', count: cancelledCount, sub: 'Cancelled', icon: <CloseCircleOutlined />, color: '#dc2626', bg: '#fee2e2' }
         ].map((card, index) => (
           <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card sx={{ borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
-              <CardContent>
+            <Card sx={{ borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', height: '100%' }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                 <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
-                  <Avatar sx={{ bgcolor: card.bg, color: card.color, width: 48, height: 48, borderRadius: '50%' }}>
+                  <Avatar sx={{ bgcolor: card.bg, color: card.color, width: 44, height: 44 }}>
                     {card.icon}
                   </Avatar>
                   <Box>
-                    <Typography variant="body2" color="text.secondary" fontWeight="medium">{card.title}</Typography>
-                    <Typography variant="h4" fontWeight="bold">{card.count}</Typography>
+                    <Typography variant="body2" color="text.secondary" fontWeight="600">{card.title}</Typography>
+                    <Typography variant="h5" fontWeight="bold">{card.count}</Typography>
                   </Box>
                 </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                  {card.sub}
-                </Typography>
-                <Button size="small" sx={{ p: 0 }}>View all &gt;</Button>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="caption" color="text.secondary">{card.sub}</Typography>
+                  <Button size="small" sx={{ p: 0, textTransform: 'none', fontSize: '0.75rem' }}>View all &gt;</Button>
+                </Stack>
               </CardContent>
             </Card>
           </Grid>
         ))}
       </Grid>
 
-      {/* 2. Main Area (Table + Side Panel) */}
-      
-      <Grid container spacing={3}>
-        {/* Table Section */}
-        <Grid item xs={12} md={showPanel ? 8 : 12}>
-          <Paper sx={{ p: 2.5, borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
-            <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h5" fontWeight="bold">Reservations List</Typography>
-              <Button variant="contained" startIcon={<PlusOutlined />} onClick={openAddForm}>
-                Add Reservation
+      {/* Main Area: កាត់បន្ថយទំហំ Table មកត្រឹម md={7} (ឬ md={6} ពេលបើក Form) និង Form មកត្រឹម md={5} (ឬ md={6}) ដើម្បីកុំឱ្យធ្លាក់ */}
+      <Grid container spacing={2}>
+        {/* LEFT: RESERVATION TABLE */}
+        <Grid item xs={12} md={showForm || showInvoice ? 6 : 12}>
+          <Paper sx={{ p: 2, borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0' }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, mb: 2 }}>
+              <Typography variant="h6" fontWeight="bold" color="#1e293b">Reservations List</Typography>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<PlusOutlined />}
+                onClick={() => {
+                  if (showForm) {
+                    setShowForm(false);
+                  } else {
+                    openAddForm();
+                  }
+                }}
+                sx={{ borderRadius: 2, textTransform: 'none' }}
+              >
+                {showForm ? 'Hide Form' : 'Add Reservation'}
               </Button>
             </Stack>
 
             {/* Filter Bar */}
-            <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-              <TextField placeholder="Search by table, reservation ID..." size="small" fullWidth />
-              <Select defaultValue="All" size="small" sx={{ minWidth: 130 }}>
-                <MenuItem value="All">All Tables</MenuItem>
-                {tableOptions.map((t) => (
-                  <MenuItem key={t} value={t}>{t}</MenuItem>
-                ))}
-              </Select>
-              <Button variant="outlined" startIcon={<CalendarOutlined />}>Date Picker</Button>
-            </Stack>
+            <Grid container spacing={1} sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={4.5}>
+                <TextField
+                  placeholder="Search..."
+                  size="small"
+                  fullWidth
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchOutlined />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4.5}>
+                <FormControl fullWidth size="small">
+                  <Select
+                    value={selectedTable}
+                    onChange={(e) => setSelectedTable(e.target.value)}
+                    MenuProps={{ PaperProps: { style: { maxHeight: 250 } } }}
+                  >
+                    <MenuItem value="All">All Tables</MenuItem>
+                    {tables.map((t) => (
+                      <MenuItem key={t.id} value={t.id}>
+                        {t.table_number || t.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <Button fullWidth variant="outlined" startIcon={<CalendarOutlined />} size="small" sx={{ height: '100%', textTransform: 'none', borderColor: '#cbd5e1', color: '#475569', fontSize: '11px' }}>
+                  Filter
+                </Button>
+              </Grid>
+            </Grid>
 
-            {/* Reservations Table -  ដើម្បីកុំឲ្យ Guests/Status ធ្លាក់ចុះក្រោម */}
-
-            <TableContainer sx={{ overflowX: 'auto' }}>
-              <Table sx={{ minWidth: 780 }}>
-                <TableHead>
+            {/* Reservations Table */}
+            <TableContainer sx={{ borderRadius: 2, border: '1px solid #f1f5f9' }}>
+              <Table size="small">
+                <TableHead sx={{ bgcolor: '#f8fafc' }}>
                   <TableRow>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>Reservation ID</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>Table</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>Customer</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>Date & Time</TableCell>
-                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>Guests</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>Status</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>Payment</TableCell>
-                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>Action</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', py: 1, px: 1, fontSize: '12px' }}>ID</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', py: 1, px: 1, fontSize: '12px' }}>Table</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', py: 1, px: 1, fontSize: '12px' }}>Customer</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', py: 1, px: 1, fontSize: '12px' }}>Date & Time</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 'bold', py: 1, px: 1, fontSize: '12px' }}>Guests</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', py: 1, px: 1, fontSize: '12px' }}>Status</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 'bold', py: 1, px: 1, fontSize: '12px' }}>Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {reservations.map((r) => {
-                    const statusStyle = getStatusColor(r.status);
-                    const paymentStyle = getPaymentColor(r.paymentStatus);
-                    return (
-                      <TableRow
-                        key={r.id}
-                        hover
-                        onClick={() => openInvoice(r)}
-                        sx={{ cursor: 'pointer' }}
-                      >
-                        <TableCell sx={{ whiteSpace: 'nowrap' }}>#{r.id}</TableCell>
-                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                          <Chip label={r.table} size="small" sx={{ bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 'bold' }} />
-                        </TableCell>
-                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                          {r.customerName ? (
-                            <Box>
-                              <Typography variant="body2" fontWeight="medium">{r.customerName}</Typography>
-                              <Typography variant="caption" color="text.secondary">{r.phone}</Typography>
-                            </Box>
-                          ) : (
-                            <Typography variant="caption" color="text.secondary">Walk-in</Typography>
-                          )}
-                        </TableCell>
-                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                          <Typography variant="body2">{r.date}</Typography>
-                          <Typography variant="caption" color="text.secondary">{r.time}</Typography>
-                        </TableCell>
-                        <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>{r.guests}</TableCell>
-                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                          <Chip label={r.status} size="small" sx={{ bgcolor: statusStyle.bg, color: statusStyle.color, fontWeight: 'bold' }} />
-                        </TableCell>
-                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                          <Chip label={r.paymentStatus} size="small" sx={{ bgcolor: paymentStyle.bg, color: paymentStyle.color, fontWeight: 'bold' }} />
-                        </TableCell>
-                        <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
-                          <Stack direction="row" spacing={0.5} justifyContent="center" onClick={(e) => e.stopPropagation()}>
-                            <IconButton size="small" color="primary" onClick={() => openInvoice(r)}><EyeOutlined /></IconButton>
-                            <IconButton size="small" color="warning" onClick={() => handleEdit(r)}><EditOutlined /></IconButton>
-                            <IconButton size="small" color="error" onClick={() => handleDelete(r.id)}><DeleteOutlined /></IconButton>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                        <CircularProgress size={24} />
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredReservations.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary', fontSize: '12px' }}>
+                        ពុំមានទិន្នន័យឡើយ
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredReservations.map((r) => {
+                      const statusStyle = getStatusColor(r.status);
+                      const isSelected = (showInvoice && invoiceReservationId === r.id);
+
+                      return (
+                        <TableRow
+                          key={r.id}
+                          hover
+                          onClick={() => openInvoice(r)}
+                          selected={isSelected}
+                          sx={{ cursor: 'pointer', '& td': { py: 1, px: 1, fontSize: '12px' } }}
+                        >
+                          <TableCell sx={{ fontWeight: '500' }}>#{r.id}</TableCell>
+                          <TableCell>
+                            <Chip label={r.table_name || 'N/A'} size="small" sx={{ bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 'bold', height: 20, fontSize: '11px' }} />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontSize: '12px', fontWeight: '500' }}>{r.customer_name || 'Walk-in'}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '10px' }}>{r.phone}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontSize: '11px' }}>{r.date}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '10px' }}>{r.time}</Typography>
+                          </TableCell>
+                          <TableCell align="center">{r.guests}</TableCell>
+                          <TableCell>
+                            <Chip label={r.status} size="small" sx={{ bgcolor: statusStyle.bg, color: statusStyle.color, fontWeight: 'bold', height: 20, fontSize: '10px' }} />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Stack direction="row" spacing={0.2} justifyContent="center">
+                              <IconButton size="small" color="primary" onClick={(e) => { e.stopPropagation(); openInvoice(r); }}>
+                                <EyeOutlined style={{ fontSize: '14px' }} />
+                              </IconButton>
+                              <IconButton size="small" color="warning" onClick={(e) => handleEdit(e, r)}>
+                                <EditOutlined style={{ fontSize: '14px' }} />
+                              </IconButton>
+                              <IconButton size="small" color="error" onClick={(e) => handleDelete(e, r.id)}>
+                                <DeleteOutlined style={{ fontSize: '14px' }} />
+                              </IconButton>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
-              <Typography variant="body2" color="text.secondary">
-                Showing 1 to {reservations.length} of {reservations.length} items
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Total: {filteredReservations.length} items
               </Typography>
-              <Pagination count={Math.max(1, Math.ceil(reservations.length / 8))} color="primary" shape="rounded" />
+              <Pagination count={Math.max(1, Math.ceil(filteredReservations.length / 5))} color="primary" shape="rounded" size="small" />
             </Box>
           </Paper>
         </Grid>
 
-        {/* 3. Side Panel: Add/Edit Form OR Invoice */}
+        {/* RIGHT SIDEBAR: NEW / EDIT RESERVATION FORM */}
+        {showForm && (
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', position: 'sticky', top: 20 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle1" fontWeight="bold">
+                  {panelMode === 'edit' ? 'Edit Reservation' : 'New Reservation'}
+                </Typography>
+                <IconButton size="small" onClick={() => setShowForm(false)}>
+                  <CloseOutlined />
+                </IconButton>
+              </Stack>
 
-        {showPanel && (
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 2.5, borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
-
-              {/*  INVOICE VIEW - ចេញពេលចុចលើតុណាមួយ */}
-
-              {panelMode === 'invoice' && invoiceReservation ? (
-                <>
-                  <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <IconButton size="small" onClick={openAddForm}><ArrowLeftOutlined /></IconButton>
-                      <Typography variant="h6" fontWeight="bold">Invoice</Typography>
-                    </Stack>
-                    <IconButton size="small" onClick={() => setShowPanel(false)}><UpOutlined /></IconButton>
-                  </Stack>
-
-                  <Box sx={{ mb: 2 }}>
-                    <Chip label={invoiceReservation.table} sx={{ bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 'bold', mb: 1 }} />
-                    <Typography variant="body2" color="text.secondary">
-                      {invoiceReservation.customerName || 'Walk-in customer'}
+              <Box component="form" onSubmit={handleSaveReservation}>
+                <Stack spacing={1}>
+                  {/* Select Table */}
+                  <Box>
+                    <Typography variant="caption" fontWeight="600" color="text.secondary" sx={{ mb: 0.2, display: 'block' }}>
+                      Select Table <span style={{ color: 'red' }}>*</span>
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {invoiceReservation.date} · {invoiceReservation.time} · {invoiceReservation.guests} pax
-                    </Typography>
+                    <FormControl size="small" fullWidth>
+                      <Select
+                        name="table_id"
+                        value={formData.table_id}
+                        onChange={handleChange}
+                        displayEmpty
+                        MenuProps={{ PaperProps: { style: { maxHeight: 200 } } }}
+                      >
+                        <MenuItem value="" disabled>Choose a table</MenuItem>
+                        {loadingTables ? (
+                          <MenuItem disabled>កំពុងទាញយក...</MenuItem>
+                        ) : (
+                          tables.map((t) => (
+                            <MenuItem key={t.id} value={t.id}>
+                              {t.table_number || t.name}
+                            </MenuItem>
+                          ))
+                        )}
+                      </Select>
+                    </FormControl>
                   </Box>
 
-                  <Divider sx={{ mb: 2 }} />
-
-                  <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>Order Items</Typography>
-
-                  {invoiceReservation.orderItems.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      មិនទាន់មានការកម្ម៉ង់សម្រាប់តុនេះទេ
-                    </Typography>
-                  ) : (
-                    <Stack spacing={1} sx={{ mb: 2 }}>
-                      {invoiceReservation.orderItems.map((item, idx) => (
-                        <Stack key={idx} direction="row" justifyContent="space-between">
-                          <Typography variant="body2">
-                            {item.name} <Typography component="span" variant="caption" color="text.secondary">x{item.qty}</Typography>
-                          </Typography>
-                          <Typography variant="body2" fontWeight="medium">${(item.qty * item.price).toFixed(2)}</Typography>
-                        </Stack>
-                      ))}
-                    </Stack>
-                  )}
-
-                  <Divider sx={{ mb: 2 }} />
-
-                  <Stack direction="row" justifyContent="space-between" sx={{ mb: 2 }}>
-                    <Typography variant="subtitle1" fontWeight="bold">Total</Typography>
-                    <Typography variant="subtitle1" fontWeight="bold">${invoiceTotal.toFixed(2)}</Typography>
-                  </Stack>
-
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>Payment Status</Typography>
-                    <Chip
-                      label={invoiceReservation.paymentStatus}
-                      sx={{
-                        bgcolor: getPaymentColor(invoiceReservation.paymentStatus).bg,
-                        color: getPaymentColor(invoiceReservation.paymentStatus).color,
-                        fontWeight: 'bold'
-                      }}
+                  {/* Customer Name */}
+                  <Box>
+                    <Typography variant="caption" fontWeight="600" color="text.secondary" sx={{ mb: 0.2, display: 'block' }}>Customer Name</Typography>
+                    <TextField
+                      name="customerName"
+                      value={formData.customerName}
+                      onChange={handleChange}
+                      placeholder="e.g. John Doe"
+                      size="small"
+                      fullWidth
                     />
                   </Box>
 
-                  <Stack direction="row" spacing={2}>
-                    {invoiceReservation.paymentStatus === 'Not Pay' ? (
-                      <Button
-                        variant="contained"
-                        color="success"
-                        fullWidth
-                        startIcon={<DollarOutlined />}
-                        onClick={() => markAsPaid(invoiceReservation.id)}
-                      >
-                        Mark as Pay Ready
-                      </Button>
-                    ) : (
-                      <Button variant="contained" fullWidth startIcon={<PrinterOutlined />}>
-                        Print Invoice
-                      </Button>
-                    )}
-                  </Stack>
-                </>
-              ) : (
-                /*   / EDIT RESERVATION FORM  */
-                <>
-                  <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" fontWeight="bold">
-                      {panelMode === 'edit' ? 'Edit Reservation' : 'Add New Reservation'}
+                  {/* Phone Number */}
+                  <Box>
+                    <Typography variant="caption" fontWeight="600" color="text.secondary" sx={{ mb: 0.2, display: 'block' }}>Phone Number</Typography>
+                    <TextField
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      placeholder="e.g. 012 345 678"
+                      size="small"
+                      fullWidth
+                    />
+                  </Box>
+
+                  {/* Date */}
+                  <Box>
+                    <Typography variant="caption" fontWeight="600" color="text.secondary" sx={{ mb: 0.2, display: 'block' }}>
+                      Date <span style={{ color: 'red' }}>*</span>
                     </Typography>
-                    <IconButton size="small" onClick={() => setShowPanel(false)}>
-                      <UpOutlined />
-                    </IconButton>
+                    <TextField
+                      name="date"
+                      type="date"
+                      value={formData.date}
+                      onChange={handleChange}
+                      size="small"
+                      fullWidth
+                    />
+                  </Box>
+
+                  {/* Time */}
+                  <Box>
+                    <Typography variant="caption" fontWeight="600" color="text.secondary" sx={{ mb: 0.2, display: 'block' }}>
+                      Time <span style={{ color: 'red' }}>*</span>
+                    </Typography>
+                    <TextField
+                      name="time"
+                      type="time"
+                      value={formData.time}
+                      onChange={handleChange}
+                      size="small"
+                      fullWidth
+                    />
+                  </Box>
+
+                  {/* Guests */}
+                  <Box>
+                    <Typography variant="caption" fontWeight="600" color="text.secondary" sx={{ mb: 0.2, display: 'block' }}>Guests (Pax)</Typography>
+                    <TextField
+                      name="guests"
+                      value={formData.guests}
+                      onChange={handleChange}
+                      placeholder="Number of guests"
+                      type="number"
+                      size="small"
+                      fullWidth
+                    />
+                  </Box>
+
+                  {/* Status */}
+                  <Box>
+                    <Typography variant="caption" fontWeight="600" color="text.secondary" sx={{ mb: 0.1, display: 'block' }}>
+                      Status <span style={{ color: 'red' }}>*</span>
+                    </Typography>
+                    <RadioGroup row name="status" value={formData.status} onChange={handleChange}>
+                      <FormControlLabel value="Confirmed" control={<Radio size="small" />} label={<Typography variant="caption">Confirmed</Typography>} />
+                      <FormControlLabel value="Pending" control={<Radio size="small" />} label={<Typography variant="caption">Pending</Typography>} />
+                    </RadioGroup>
+                  </Box>
+
+                  {/* Special Requests */}
+                  <Box>
+                    <Typography variant="caption" fontWeight="600" color="text.secondary" sx={{ mb: 0.2, display: 'block' }}>Special Requests</Typography>
+                    <TextField
+                      name="specialRequests"
+                      value={formData.specialRequests}
+                      onChange={handleChange}
+                      placeholder="Notes..."
+                      multiline
+                      rows={2}
+                      size="small"
+                      fullWidth
+                    />
+                  </Box>
+
+                  {/* Buttons */}
+                  <Stack direction="row" spacing={1} sx={{ pt: 1 }}>
+                    <Button
+                      variant="outlined"
+                      color="inherit"
+                      size="small"
+                      fullWidth
+                      onClick={() => { resetForm(); setShowForm(false); }}
+                      sx={{ textTransform: 'none', borderRadius: 2 }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      size="small"
+                      fullWidth
+                      startIcon={<PlusOutlined />}
+                      sx={{ textTransform: 'none', borderRadius: 2, bgcolor: '#2563eb' }}
+                    >
+                      {panelMode === 'edit' ? 'Update' : 'Save'}
+                    </Button>
                   </Stack>
+                </Stack>
+              </Box>
+            </Paper>
+          </Grid>
+        )}
 
-                  <form onSubmit={handleSaveReservation}>
-                    <Stack spacing={2}>
-                      <FormControl fullWidth size="small">
-                        <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                          Table <span style={{ color: 'red' }}>*</span>
-                        </Typography>
-                        <Select name="table" value={formData.table} onChange={handleChange} displayEmpty>
-                          <MenuItem value="" disabled>Select table</MenuItem>
-                          {tableOptions.map((t) => (
-                            <MenuItem key={t} value={t}>{t}</MenuItem>
-                          ))}
-                        </Select>
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                          ការគិតលុយផ្អែកលើតុនេះ មិនមែនលើឈ្មោះភ្ញៀវទេ
-                        </Typography>
-                      </FormControl>
+        {/* RIGHT SIDEBAR: INVOICE VIEW */}
+        {showInvoice && invoiceReservation && (
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', position: 'sticky', top: 20 }}>
+              <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Typography variant="subtitle1" fontWeight="bold">Invoice Summary</Typography>
+                <IconButton size="small" onClick={() => setShowInvoice(false)}>
+                  <CloseOutlined />
+                </IconButton>
+              </Stack>
 
+              <Box sx={{ mb: 1.5, p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #f1f5f9' }}>
+                <Chip label={invoiceReservation.table_name || 'N/A'} size="small" sx={{ bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 'bold', mb: 0.5, height: 20, fontSize: '11px' }} />
+                <Typography variant="subtitle2" fontWeight="bold" sx={{ fontSize: '13px' }}>
+                  {invoiceReservation.customer_name || 'Walk-in Customer'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '11px' }}>
+                  {invoiceReservation.phone || 'No phone number'}
+                </Typography>
+              </Box>
+
+              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1, fontSize: '12px' }}>Order Details</Typography>
+
+              {!invoiceReservation.orderItems || invoiceReservation.orderItems.length === 0 ? (
+                <Box sx={{ py: 2, textAlign: 'center', bgcolor: '#fafafa', borderRadius: 2, mb: 1.5 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    មិនទាន់មានការកម្ម៉ង់ម្ហូបទេ
+                  </Typography>
+                </Box>
+              ) : (
+                <Stack spacing={1} sx={{ mb: 1.5, maxHeight: 150, overflowY: 'auto', pr: 1 }}>
+                  {invoiceReservation.orderItems.map((item, idx) => (
+                    <Stack key={idx} direction="row" justifyContent="space-between" alignItems="center">
                       <Box>
-                        <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                          Customer Name (Optional)
-                        </Typography>
-                        <TextField
-                          name="customerName"
-                          value={formData.customerName}
-                          onChange={handleChange}
-                          placeholder="Enter customer name (if known)"
-                          size="small"
-                          fullWidth
-                        />
+                        <Typography variant="body2" sx={{ fontSize: '12px', fontWeight: '500' }}>{item.name}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '10px' }}>${item.price.toFixed(2)} x {item.qty}</Typography>
                       </Box>
-
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                          Phone Number (Optional)
-                        </Typography>
-                        <TextField
-                          name="phone"
-                          value={formData.phone}
-                          onChange={handleChange}
-                          placeholder="Enter phone (if known)"
-                          size="small"
-                          fullWidth
-                        />
-                      </Box>
-
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                          Reservation Date & Time <span style={{ color: 'red' }}>*</span>
-                        </Typography>
-                        <Stack direction="row" spacing={1}>
-                          <TextField name="date" value={formData.date} onChange={handleChange} placeholder="20 May 2024" size="small" fullWidth />
-                          <TextField name="time" value={formData.time} onChange={handleChange} placeholder="7:00 PM" size="small" fullWidth />
-                        </Stack>
-                      </Box>
-
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                          Number of Guests (pax)
-                        </Typography>
-                        <TextField
-                          name="guests"
-                          value={formData.guests}
-                          onChange={handleChange}
-                          placeholder="pax"
-                          type="number"
-                          size="small"
-                          fullWidth
-                        />
-                      </Box>
-
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>Special Requests</Typography>
-                        <TextField
-                          name="specialRequests"
-                          value={formData.specialRequests}
-                          onChange={handleChange}
-                          placeholder="Special Requests"
-                          multiline
-                          rows={2}
-                          size="small"
-                          fullWidth
-                        />
-                      </Box>
-
-                      <FormControl>
-                        <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                          Status <span style={{ color: 'red' }}>*</span>
-                        </Typography>
-                        <RadioGroup row name="status" value={formData.status} onChange={handleChange}>
-                          <FormControlLabel value="Confirmed" control={<Radio size="small" />} label="Confirmed" />
-                          <FormControlLabel value="Pending" control={<Radio size="small" />} label="Pending" />
-                        </RadioGroup>
-                      </FormControl>
-
-                      <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-                        <Button type="submit" variant="contained" fullWidth startIcon={<PlusOutlined />}>
-                          {panelMode === 'edit' ? 'Update Reservation' : 'Save Reservation'}
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="secondary"
-                          fullWidth
-                          onClick={() => { resetForm(); setShowPanel(false); }}
-                        >
-                          Cancel
-                        </Button>
-                      </Stack>
+                      <Typography variant="body2" fontWeight="bold" sx={{ fontSize: '12px' }}>${(item.qty * item.price).toFixed(2)}</Typography>
                     </Stack>
-                  </form>
-                </>
+                  ))}
+                </Stack>
               )}
+
+              <Divider sx={{ my: 1.5 }} />
+
+              <Stack direction="row" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" fontWeight="bold">Total Amount</Typography>
+                <Typography variant="subtitle2" fontWeight="bold" color="primary.main">${invoiceTotal.toFixed(2)}</Typography>
+              </Stack>
+
+              <Stack direction="row" spacing={1}>
+                {invoiceReservation.paymentStatus === 'Not Pay' || !invoiceReservation.paymentStatus ? (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    size="small"
+                    fullWidth
+                    startIcon={<DollarOutlined />}
+                    onClick={() => markAsPaid(invoiceReservation.id)}
+                    sx={{ textTransform: 'none', borderRadius: 2, fontSize: '12px' }}
+                  >
+                    Mark as Pay Ready
+                  </Button>
+                ) : (
+                  <Button variant="contained" size="small" fullWidth startIcon={<PrinterOutlined />} sx={{ textTransform: 'none', borderRadius: 2, fontSize: '12px' }}>
+                    Print Invoice
+                  </Button>
+                )}
+              </Stack>
             </Paper>
           </Grid>
         )}

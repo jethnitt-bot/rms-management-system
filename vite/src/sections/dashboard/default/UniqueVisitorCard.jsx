@@ -11,10 +11,39 @@ import Box from '@mui/material/Box';
 import MainCard from 'components/MainCard';
 import IncomeAreaChart from './IncomeAreaChart';
 
-// ==============================|| DEFAULT - UNIQUE VISITOR ||============================== //
+// assets
+import InboxOutlined from '@ant-design/icons/InboxOutlined';
 
-export default function UniqueVisitorCard() {
+// ==============================|| EMPTY STATE ||============================== //
+function EmptyState({ message = 'No data yet', height = 220 }) {
+  return (
+    <Box
+      sx={{
+        height,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 1,
+        color: 'text.secondary'
+      }}
+    >
+      <InboxOutlined style={{ fontSize: '1.75rem' }} />
+      <Typography variant="body2">{message}</Typography>
+    </Box>
+  );
+}
+
+// ==============================|| DEFAULT - UNIQUE VISITOR ||============================== //
+// `data` — TODO (backend): pass real page-views/sessions series once the API
+// is connected, e.g. data={{ monthly: [...], weekly: [...] }}.
+// Until then it defaults to empty and the card shows "No data yet" instead
+// of a chart with fake numbers.
+export default function UniqueVisitorCard({ data }) {
   const [view, setView] = useState('monthly'); // 'monthly' or 'weekly'
+
+  const seriesForView = data ? data[view] : null;
+  const hasData = Array.isArray(seriesForView) && seriesForView.length > 0;
 
   return (
     <>
@@ -44,9 +73,18 @@ export default function UniqueVisitorCard() {
         </Grid>
       </Grid>
       <MainCard content={false} sx={{ mt: 1.5 }}>
-        <Box sx={{ pt: 1, pr: 2 }}>
-          <IncomeAreaChart view={view} />
-        </Box>
+        {hasData ? (
+          <Box sx={{ pt: 1, pr: 2 }}>
+            {/* IncomeAreaChart.jsx may still have its own internal mock data —
+                send me that file too if you want it fully driven by `series` below
+                instead of its own hardcoded numbers. */}
+            <IncomeAreaChart view={view} series={seriesForView} />
+          </Box>
+        ) : (
+          <Box sx={{ p: 2 }}>
+            <EmptyState message="No visitor data yet" />
+          </Box>
+        )}
       </MainCard>
     </>
   );
